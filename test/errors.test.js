@@ -65,6 +65,18 @@ test('toErrorPayload serializes known and unknown errors', () => {
 });
 
 test('kind sets', () => {
-  assert.deepEqual([...FATAL_KINDS].sort(), ['auth', 'config', 'forbidden_local', 'network']);
-  assert.deepEqual([...RETRYABLE_KINDS].sort(), ['network', 'rate_limit', 'server']);
+  assert.deepEqual([...FATAL_KINDS].sort(), ['auth', 'config', 'forbidden_local', 'network', 'quota']);
+  assert.deepEqual([...RETRYABLE_KINDS].sort(), ['network', 'rate_limit', 'server', 'timeout']);
+});
+
+test('429 caused by an exhausted quota is a fatal quota error, not a retryable rate limit', () => {
+  const gemini = classifyHttpError(429, '{"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details.","status":"RESOURCE_EXHAUSTED"}}', { url: CLOUD });
+  assert.equal(gemini.kind, 'quota');
+  assert.match(gemini.message, /利用上限/);
+  const openai = classifyHttpError(429, '{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}', { url: CLOUD });
+  assert.equal(openai.kind, 'quota');
+  assert.ok(FATAL_KINDS.has('quota'));
+  assert.ok(!RETRYABLE_KINDS.has('quota'));
+  assert.ok(RETRYABLE_KINDS.has('timeout'));
+  assert.equal(classifyHttpError(429, '{"error":{"message":"Too many requests"}}', { url: CLOUD }).kind, 'rate_limit');
 });

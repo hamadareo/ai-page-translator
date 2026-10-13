@@ -132,3 +132,13 @@ test('callProvider rethrows aborts untouched', async () => {
     (e) => e === abort,
   );
 });
+
+test('callProvider gives up on a request that never answers', async () => {
+  const neverAnswers = (_url, init) => new Promise((_res, rej) => {
+    init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')));
+  });
+  await assert.rejects(
+    callProvider('openai', ['a'], 'ja', { apiKey: 'k', model: 'm' }, { fetch: neverAnswers, timeoutMs: 30 }),
+    (e) => e.kind === 'timeout' && /時間/.test(e.message),
+  );
+});

@@ -227,3 +227,23 @@ test('honors translate="no" unless the ignoreTranslateNo setting is on', async (
   assert.equal(on.document.querySelectorAll('p')[1].textContent, '[ja]Body');
   on.pt.stop();
 });
+
+test('a hung request from an earlier run does not block translating again', async () => {
+  const { window, document } = makeDocument('<p>One</p>');
+  let hang = true;
+  const sendMessage = async (msg) => {
+    if (msg.type === 'getConfig') return { ok: true, maxUnitsPerBatch: 40, maxCharsPerBatch: 3000, concurrency: 1 };
+    if (hang) return new Promise(() => {}); // never answers
+    return { ok: true, translations: msg.texts.map((t) => `[ja]${t}`) };
+  };
+  const pt = createPageTranslator({ document, sendMessage, debounceMs: 10, MutationObserverImpl: window.MutationObserver });
+  pt.translate(); // stuck on the hung request
+  await sleep(20);
+  pt.stop();
+  hang = false;
+  const status = await Promise.race([pt.translate(), sleep(500).then(() => 'timed out')]);
+  assert.notEqual(status, 'timed out', 'second translate must not wait for the hung run');
+  assert.equal(status.state, 'done');
+  assert.equal(document.querySelector('p').textContent, '[ja]One');
+  pt.stop();
+});

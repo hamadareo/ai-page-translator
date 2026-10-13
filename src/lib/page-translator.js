@@ -23,6 +23,7 @@ export function createPageTranslator({
   let timer = null;
   let firstPendingAt = null;
   let queue = Promise.resolve();
+  let queueSession = 0;
   // 送信済み（翻訳待ち・失敗含む）の原文。「翻訳」を押し直すたびにリセットして失敗分を再試行する
   let claimed = new WeakMap();
   let claimedTitle = null;
@@ -160,6 +161,11 @@ export function createPageTranslator({
   }
 
   function scan(id) {
+    // 新しい翻訳は、止まったままの古い処理の終わりを待たない
+    if (queueSession !== id) {
+      queueSession = id;
+      queue = Promise.resolve();
+    }
     queue = queue.then(() => (id === session ? runScan(id) : undefined));
     return queue;
   }

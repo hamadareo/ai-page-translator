@@ -13,29 +13,50 @@ export const PROVIDERS = {
 };
 
 /** @returns {Promise<string[]>} */
-export async function callProvider(providerId, texts, targetLang, config, { fetch = globalThis.fetch, signal } = {}) {
+/** 返事のない要求を打ち切るまでの時間 */
+export const REQUEST_TIMEOUT_MS = 120000;
+
+export async function callProvider(providerId, texts, targetLang, config, { fetch = globalThis.fetch, signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   const provider = PROVIDERS[providerId];
   if (!provider) throw new TranslationError('config', `未対応のプロバイダです: ${providerId}`);
   const { url, init } = provider.buildRequest(texts, targetLang, config);
 
-  let res;
-  try {
-    res = await fetch(url, { ...init, signal });
-  } catch (err) {
-    if (err?.name === 'AbortError') throw err;
-    throw networkError(url);
-  }
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort);
+  const timeoutError = () =>
+    new TranslationError('timeout', `応答に時間がかかりすぎたため打ち切りました（${Math.round(timeoutMs / 1000)}秒）`);
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw classifyHttpError(res.status, body, { url, retryAfter: res.headers.get('retry-after') });
-  }
-
-  let json;
   try {
-    json = await res.json();
-  } catch {
-    throw new TranslationError('bad_response', '応答がJSONではありません');
+    let res;
+    try {
+      res = await fetch(url, { ...init, signal: controller.signal });
+    } catch (err) {
+      if (timedOut) throw timeoutError();
+      if (err?.name === 'AbortError') throw err;
+      throw networkError(url);
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw classifyHttpError(res.status, body, { url, retryAfter: res.headers.get('retry-after') });
+    }
+
+    let json;
+    try {
+      json = await res.json();
+    } catch {
+      if (timedOut) throw timeoutError();
+      throw new TranslationError('bad_response', '応答がJSONではありません');
+    }
+    return parseTranslations(provider.extractText(json), texts.length);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
   }
-  return parseTranslations(provider.extractText(json), texts.length);
 }

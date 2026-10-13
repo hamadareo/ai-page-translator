@@ -44,3 +44,12 @@ test('does not retry non-retryable errors', async () => {
   );
   assert.equal(calls, 1);
 });
+
+test('timeouts are retried', async () => {
+  let calls = 0;
+  const result = await withRetry(async () => {
+    if (++calls === 1) throw new TranslationError('timeout', 'slow');
+    return 'ok';
+  }, { sleep: async () => {} });
+  assert.equal(result, 'ok');
+});

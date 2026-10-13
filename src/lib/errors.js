@@ -1,4 +1,4 @@
-/** @typedef {'auth'|'rate_limit'|'server'|'network'|'forbidden_local'|'bad_response'|'config'|'unknown'} ErrorKind */
+/** @typedef {'auth'|'quota'|'rate_limit'|'server'|'timeout'|'network'|'forbidden_local'|'bad_response'|'config'|'unknown'} ErrorKind */
 
 export class TranslationError extends Error {
   /**
@@ -15,9 +15,9 @@ export class TranslationError extends Error {
 }
 
 /** これらが起きたらページ全体の翻訳を止める */
-export const FATAL_KINDS = new Set(['auth', 'network', 'forbidden_local', 'config']);
+export const FATAL_KINDS = new Set(['auth', 'quota', 'network', 'forbidden_local', 'config']);
 /** これらはバックオフして再試行する */
-export const RETRYABLE_KINDS = new Set(['rate_limit', 'server', 'network']);
+export const RETRYABLE_KINDS = new Set(['rate_limit', 'server', 'timeout', 'network']);
 
 export function isLocalUrl(url) {
   try {
@@ -57,6 +57,13 @@ export function classifyHttpError(status, bodyText, { url = '', retryAfter = nul
   }
   if (status === 401 || status === 403) {
     return new TranslationError('auth', `APIキーを確認してください (${status})${suffix}`);
+  }
+  if (status === 429 && /quota/i.test(String(bodyText))) {
+    // 利用上限（クォータ）切れは待っても回復しないことが多いので、再試行せずに止めて知らせる
+    return new TranslationError(
+      'quota',
+      `APIの利用上限（クォータ）に達しました。しばらく待ってから再度お試しいただくか、プロバイダーの管理画面で上限と課金設定を確認してください${suffix}`,
+    );
   }
   if (status === 429) {
     return new TranslationError('rate_limit', `レート制限に達しました (429)${suffix}`, {
