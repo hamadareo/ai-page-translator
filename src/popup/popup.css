@@ -1,0 +1,12 @@
+:root { color-scheme: light dark; --accent: #2563eb; }
+body { width: 280px; margin: 0; padding: 12px 14px; font: 13px/1.5 system-ui, -apple-system, "Hiragino Sans", sans-serif; }
+h1 { margin: 0; font-size: 15px; }
+.sub { margin: 2px 0 10px; color: GrayText; font-size: 12px; word-break: break-all; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.actions .primary { grid-column: 1 / -1; }
+button { padding: 7px 10px; border: 1px solid #9ca3af; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+button.primary { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.status { min-height: 1.5em; margin: 10px 0 6px; }
+.status.error { color: #dc2626; }
+a { color: var(--accent); font-size: 12px; }

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>AI Page Translator</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>AI Page Translator</h1>
+    <p id="provider" class="sub"></p>
+  </header>
+  <div class="actions">
+    <button id="translate" class="primary" type="button">翻訳</button>
+    <button id="stop" type="button">停止</button>
+    <button id="restore" type="button">原文に戻す</button>
+  </div>
+  <p id="status" class="status" aria-live="polite">待機中</p>
+  <a id="open-options" href="#">設定を開く</a>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
