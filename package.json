@@ -1,0 +1,12 @@
+{
+  "name": "ai-page-translator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.2"
+  }
+}
