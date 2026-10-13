@@ -1,0 +1,52 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  DEFAULT_SETTINGS, PROVIDER_IDS, PROVIDER_LABELS, mergeSettings, validateSettings, loadSettings, saveSettings, SETTINGS_KEY,
+} from '../src/lib/settings.js';
+import { createFakeStorage } from './helpers/fake-storage.js';
+
+test('defaults match the spec', () => {
+  const s = mergeSettings(undefined);
+  assert.equal(s.provider, 'openai');
+  assert.equal(s.targetLang, '日本語');
+  assert.equal(s.maxUnitsPerBatch, 40);
+  assert.equal(s.maxCharsPerBatch, 3000);
+  assert.equal(s.concurrency, 3);
+  assert.equal(s.providers.openai.model, 'gpt-5.5');
+  assert.equal(s.providers.anthropic.model, 'claude-opus-5-5');
+  assert.equal(s.providers.gemini.model, 'gemini-3.8-flash');
+  assert.deepEqual(s.providers.compat, { apiKey: '', model: 'llama3.2', baseUrl: 'http://localhost:11434/v1', jsonMode: false });
+  assert.deepEqual(PROVIDER_IDS, ['openai', 'anthropic', 'gemini', 'compat']);
+  for (const id of PROVIDER_IDS) assert.equal(typeof PROVIDER_LABELS[id], 'string');
+});
+
+test('mergeSettings keeps defaults for missing nested keys and does not share objects', () => {
+  const s = mergeSettings({ provider: 'anthropic', providers: { anthropic: { apiKey: 'k' } } });
+  assert.equal(s.provider, 'anthropic');
+  assert.equal(s.providers.anthropic.apiKey, 'k');
+  assert.equal(s.providers.anthropic.model, 'claude-opus-5-5');
+  s.providers.openai.apiKey = 'mutated';
+  assert.equal(DEFAULT_SETTINGS.providers.openai.apiKey, '');
+});
+
+test('validateSettings', () => {
+  const ok = mergeSettings({ providers: { openai: { apiKey: 'k' } } });
+  assert.equal(validateSettings(ok), null);
+  assert.match(validateSettings(mergeSettings({})), /APIキー/);
+  assert.match(validateSettings(mergeSettings({ providers: { openai: { apiKey: 'k', model: ' ' } } })), /モデル/);
+  assert.match(validateSettings(mergeSettings({ provider: 'nope' })), /プロバイダ/);
+  assert.equal(validateSettings(mergeSettings({ provider: 'compat' })), null, 'compat needs no key');
+  assert.match(validateSettings(mergeSettings({ provider: 'compat', providers: { compat: { baseUrl: 'ftp://x' } } })), /ベースURL/);
+  assert.match(validateSettings(mergeSettings({ provider: 'compat', providers: { compat: { baseUrl: 'nonsense' } } })), /ベースURL/);
+  assert.match(validateSettings(mergeSettings({ provider: 'compat', targetLang: '' })), /翻訳先言語/);
+  assert.match(validateSettings(mergeSettings({ provider: 'compat', concurrency: 0 })), /同時/);
+});
+
+test('load and save round-trip through storage', async () => {
+  const storage = createFakeStorage();
+  assert.deepEqual(await loadSettings(storage), mergeSettings(undefined));
+  const s = mergeSettings({ provider: 'gemini', providers: { gemini: { apiKey: 'g' } } });
+  await saveSettings(storage, s);
+  assert.deepEqual(storage.data[SETTINGS_KEY], s);
+  assert.deepEqual(await loadSettings(storage), s);
+});
