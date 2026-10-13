@@ -227,12 +227,20 @@ test('overflow that existed before translation is not counted', () => {
   assert.equal(document.getElementById('inner').style.transform, '');
 });
 
-test('no scaling when it would need to shrink below 60%', () => {
+test('no scaling when it would need to shrink below 40%', () => {
+  const { document } = makeDocument('<div id="box" style="height: 100px"><div id="inner"><p>Short</p></div></div>');
+  stubBox(document.getElementById('box'), 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'とてもとてもながいやくぶんです');
+  assert.equal(document.getElementById('inner').style.transform, '');
+});
+
+test('a moderate overflow below 60% is still scaled when the box would otherwise overflow', () => {
   const { document } = makeDocument('<div id="box" style="height: 100px"><div id="inner"><p>Short</p></div></div>');
   stubBox(document.getElementById('box'), 100);
   const state = createDomState();
   applyRun(state, collectUnits(document.body)[0], 'とてもながいやくぶん');
-  assert.equal(document.getElementById('inner').style.transform, '');
+  assert.equal(document.getElementById('inner').style.transform, 'scale(0.5)');
 });
 
 test('an element that already has a transform is never overwritten', () => {
@@ -300,6 +308,37 @@ test('restoreAll undoes a line scale exactly', () => {
   const html = '<h2 style="white-space: nowrap">Contact</h2>';
   const { document } = makeDocument(html);
   stubOverflow(document.querySelector('h2'), 150, 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'お問い合わせ');
+  restoreAll(state, document);
+  assert.equal(document.body.innerHTML, html);
+});
+
+/** A short line that wraps to two lines in a fixed box: one line (nowrap) is 150px wide in a 100px line and 40px tall; wrapped it is 80px tall. */
+function stubWrappingHeading(document) {
+  const box = document.getElementById('box');
+  const h2 = document.querySelector('h2');
+  const nowrap = () => document.defaultView.getComputedStyle(h2).whiteSpace === 'nowrap';
+  Object.defineProperty(box, 'clientHeight', { configurable: true, get: () => 40 });
+  Object.defineProperty(box, 'scrollHeight', { configurable: true, get: () => (h2.textContent === 'Contact' || nowrap() ? 40 : 80) });
+  Object.defineProperty(h2, 'clientWidth', { configurable: true, get: () => 100 });
+  Object.defineProperty(h2, 'scrollWidth', { configurable: true, get: () => (h2.textContent !== 'Contact' && nowrap() ? 150 : 100) });
+  return h2;
+}
+
+test('a short heading that would wrap in a fixed box stays on one line and is scaled to the width', () => {
+  const { document } = makeDocument('<div id="box" style="height: 40px"><div id="inner"><h2>Contact</h2></div></div>');
+  const h2 = stubWrappingHeading(document);
+  const state = createDomState();
+  assert.equal(applyRun(state, collectUnits(document.body)[0], 'お問い合わせ'), 'applied');
+  assert.equal(document.defaultView.getComputedStyle(h2).whiteSpace, 'nowrap');
+  assert.equal(document.getElementById('inner').style.transform, 'scale(0.667)');
+});
+
+test('restoreAll undoes the one-line choice and its scale exactly', () => {
+  const html = '<div id="box" style="height: 40px"><div id="inner"><h2>Contact</h2></div></div>';
+  const { document } = makeDocument(html);
+  stubWrappingHeading(document);
   const state = createDomState();
   applyRun(state, collectUnits(document.body)[0], 'お問い合わせ');
   restoreAll(state, document);

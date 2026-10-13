@@ -84,7 +84,31 @@ function findFixedBox(el) {
   return null;
 }
 
-function fitBox(state, box, from) {
+/** 枠に収めるときの縮小の下限。これより小さくすると読めなくなるので、あふれたままにする */
+const MIN_BOX_SCALE = 0.4;
+/** 1行のまま縮める候補を試す、短い文の目安（レイアウトを測れない環境向け） */
+const SHORT_TEXT_LENGTH = 40;
+
+/** 置き換え前のテキストが何行で表示されていたか（測れなければ 0） */
+function lineCount(nodes) {
+  const doc = nodes[0]?.ownerDocument;
+  const range = doc?.createRange?.();
+  if (!range?.getClientRects) return 0;
+  range.setStartBefore(nodes[0]);
+  range.setEndAfter(nodes.at(-1));
+  const tops = [];
+  for (const rect of range.getClientRects()) {
+    if (rect.width < 1 || rect.height < 1) continue;
+    if (!tops.some((top) => Math.abs(top - rect.top) < rect.height / 2)) tops.push(rect.top);
+  }
+  return tops.length;
+}
+
+/**
+ * 高さ固定の枠から訳文があふれたら、「そのまま」「折り返す」「1行のまま」の候補を実際に測り、
+ * 縮小が最も少なくて済む表示方法を選んで、枠に収まるまで縮小する
+ */
+function fitBox(state, box, from, singleLineAllowed) {
   const view = box.ownerDocument.defaultView;
   if (!view?.getComputedStyle) return;
   const previous = state.fits.get(box);
@@ -95,17 +119,34 @@ function fitBox(state, box, from) {
     state.fits.delete(box);
   }
   const limit = Math.max(box.clientHeight, state.baselines.get(box) ?? 0);
-  const height = box.scrollHeight;
-  if (!limit || height <= limit + 2) return;
-  const ratio = limit / height;
-  if (ratio < MIN_FIT_SCALE) return;
+  const fromAttr = from.getAttribute('style');
+  const baseWhiteSpace = view.getComputedStyle(from).whiteSpace;
+  const tryWhiteSpace = (whiteSpace) => {
+    resetAttr(from, fromAttr);
+    if (whiteSpace) from.style.setProperty('white-space', whiteSpace, 'important');
+    const widthScale = from.scrollWidth > from.clientWidth + 1 ? from.clientWidth / from.scrollWidth : 1;
+    const heightScale = limit && box.scrollHeight > limit + 2 ? limit / box.scrollHeight : 1;
+    return { whiteSpace, scale: Math.min(widthScale, heightScale) };
+  };
+
+  const candidates = [tryWhiteSpace(null)];
+  if (RELAXED_WHITE_SPACE[baseWhiteSpace]) candidates.push(tryWhiteSpace(RELAXED_WHITE_SPACE[baseWhiteSpace]));
+  if (singleLineAllowed && baseWhiteSpace !== 'nowrap') candidates.push(tryWhiteSpace('nowrap'));
+  const best = candidates.reduce((a, b) => (b.scale > a.scale + 0.01 ? b : a));
+
+  resetAttr(from, fromAttr);
+  if (best.whiteSpace) {
+    from.style.setProperty('white-space', best.whiteSpace, 'important');
+    state.records.push({ kind: 'fit', target: from, originalAttr: fromAttr, writtenAttr: from.getAttribute('style') });
+  }
+  if (best.scale >= 1 || best.scale < MIN_BOX_SCALE) return;
 
   let target = null;
   for (let a = from; a && a !== box; a = a.parentElement) {
     if (hasNoTransform(view.getComputedStyle(a))) target = a;
   }
   if (!target) return;
-  state.fits.set(box, scaleElement(state, target, ratio, originFor(view.getComputedStyle(from))));
+  state.fits.set(box, scaleElement(state, target, best.scale, originFor(view.getComputedStyle(from))));
 }
 
 function restoreFit(record) {
@@ -136,6 +177,10 @@ export function applyRun(state, unit, translated) {
   const doc = unit.parent.ownerDocument;
   const box = findFixedBox(unit.parent);
   if (box && !state.baselines.has(box)) state.baselines.set(box, box.scrollHeight);
+  const originalLines = box ? lineCount(unit.nodes) : 0;
+  const singleLineAllowed = originalLines
+    ? originalLines === 1
+    : unit.text.length <= SHORT_TEXT_LENGTH && !/<x\d+\/>/.test(unit.text);
   const elementChildren = tokens
     .filter((t) => t.type !== 'x')
     .map((t) => ({ node: t.node, children: [...t.node.childNodes] }));
@@ -177,8 +222,8 @@ export function applyRun(state, unit, translated) {
 
   for (const t of written) state.seen.set(t, t.data);
   state.records.push({ kind: 'run', parent: unit.parent, originals: unit.nodes.slice(), elementChildren, current: top, reused });
-  relaxWhiteSpace(state, unit.parent);
-  if (box) fitBox(state, box, unit.parent);
+  if (box) fitBox(state, box, unit.parent, singleLineAllowed);
+  else relaxWhiteSpace(state, unit.parent);
   return 'applied';
 }
 
