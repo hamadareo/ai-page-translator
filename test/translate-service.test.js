@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTranslateService, translateWithSplit } from '../src/lib/translate-service.js';
-import { createCache } from '../src/lib/cache.js';
+import { createCache, cacheKey } from '../src/lib/cache.js';
+import { PROMPT_VERSION } from '../src/lib/prompt.js';
 import { createLimiter } from '../src/lib/limiter.js';
 import { mergeSettings } from '../src/lib/settings.js';
 import { TranslationError } from '../src/lib/errors.js';
@@ -101,4 +102,12 @@ test('a failing cache write does not lose translations', async () => {
     sleep: async () => {},
   });
   assert.deepEqual(await translate(['a']), ['A']);
+});
+
+test('cache keys include the current prompt version', async () => {
+  const seen = [];
+  const cache = { getMany: async (keys) => { seen.push(...keys); return keys.map(() => undefined); }, setMany: async () => {} };
+  const translate = createTranslateService({ getSettings: async () => settings, cache, limiter: createLimiter(1), call: upper, sleep: async () => {} });
+  await translate(['a']);
+  assert.deepEqual(seen, [await cacheKey('openai', settings.providers.openai.model, settings.targetLang, 'a', PROMPT_VERSION)]);
 });

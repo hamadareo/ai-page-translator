@@ -1,5 +1,8 @@
 import { TranslationError } from './errors.js';
 
+/** 指示文を変えたら上げる。キャッシュのキーに含まれ、古い訳を使わなくなる */
+export const PROMPT_VERSION = '2';
+
 export function buildSystemPrompt(targetLang) {
   return [
     `You are a professional translator. Translate each string in the "texts" array of the user's JSON into natural, fluent ${targetLang}.`,
@@ -7,7 +10,9 @@ export function buildSystemPrompt(targetLang) {
     '- Strings may contain placeholder tags: <g0>…</g0> wraps inline markup such as links or bold text, <c0>…</c0> wraps inline code, and <x1/> stands for a standalone element.',
     '- Keep every placeholder tag exactly once and unchanged, moving it to the position that fits the translated word order.',
     '- Copy the content of <cN>…</cN> tags, URLs, file paths and code as is; do not translate them.',
-    '- If a string is already in the target language or should not be translated (such as names), return it unchanged.',
+    '- Keep personal names exactly as written; never guess a native-script spelling for them.',
+    `- Translate names of organizations such as universities, institutes and companies into their well-known official name in ${targetLang} (for example, "Osaka U." becomes 大阪大学 in Japanese). Keep abbreviations you are not sure about unchanged.`,
+    '- If a string is already in the target language, return it unchanged.',
     '- Return exactly one translation per input string, in the same order.',
     '- Respond with JSON only, in the form {"translations": ["...", "..."]}, with no explanations or code fences.',
   ].join('\n');

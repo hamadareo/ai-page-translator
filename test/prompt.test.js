@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSystemPrompt, buildUserMessage, parseTranslations, estimateMaxTokens } from '../src/lib/prompt.js';
+import { buildSystemPrompt, buildUserMessage, parseTranslations, estimateMaxTokens, PROMPT_VERSION } from '../src/lib/prompt.js';
 
 test('system prompt mentions the language, the tags and JSON', () => {
   const p = buildSystemPrompt('日本語');
@@ -41,4 +41,18 @@ test('estimateMaxTokens stays within bounds', () => {
   assert.equal(estimateMaxTokens(['']), 2048);
   assert.equal(estimateMaxTokens(['x'.repeat(100000)]), 16000);
   assert.equal(estimateMaxTokens(['x'.repeat(2000)]), 4024);
+});
+
+test('people keep their names; well-known organizations get their official target-language name', () => {
+  const p = buildSystemPrompt('日本語');
+  assert.match(p, /personal names exactly as written/i);
+  assert.match(p, /organization/i);
+  assert.match(p, /official name/i);
+  assert.match(p, /not sure/i);
+  assert.doesNotMatch(p, /\(such as names\)/, 'the old blanket "keep names" rule is gone');
+});
+
+test('PROMPT_VERSION is exported for cache invalidation', () => {
+  assert.equal(typeof PROMPT_VERSION, 'string');
+  assert.ok(PROMPT_VERSION.length > 0);
 });

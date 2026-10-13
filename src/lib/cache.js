@@ -1,7 +1,7 @@
 export const CACHE_KEY = 'translationCache';
 
-export async function cacheKey(provider, model, targetLang, text) {
-  const data = new TextEncoder().encode(`${provider}|${model}|${targetLang}|${text}`);
+export async function cacheKey(provider, model, targetLang, text, promptVersion = '') {
+  const data = new TextEncoder().encode(`${provider}|${model}|${targetLang}|${promptVersion}|${text}`);
   const digest = await crypto.subtle.digest('SHA-256', data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

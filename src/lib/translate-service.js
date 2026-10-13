@@ -1,4 +1,5 @@
 import { cacheKey } from './cache.js';
+import { PROMPT_VERSION } from './prompt.js';
 import { callProvider } from './providers/index.js';
 import { withRetry } from './retry.js';
 import { TranslationError } from './errors.js';
@@ -28,7 +29,7 @@ export function createTranslateService({ getSettings, cache, limiter, call = cal
 
     const { provider, targetLang } = settings;
     const config = settings.providers[provider];
-    const keys = await Promise.all(texts.map((t) => cacheKey(provider, config.model, targetLang, t)));
+    const keys = await Promise.all(texts.map((t) => cacheKey(provider, config.model, targetLang, t, PROMPT_VERSION)));
     const cached = await cache.getMany(keys);
     const result = cached.map((v) => v ?? null);
     const missing = [];

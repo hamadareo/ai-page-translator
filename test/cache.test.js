@@ -52,3 +52,7 @@ test('concurrent first reads load storage once', async () => {
   await Promise.all([cache.getMany(['a']), cache.getMany(['a'])]);
   assert.equal(gets, 1);
 });
+
+test('cacheKey depends on the prompt version', async () => {
+  assert.notEqual(await cacheKey('openai', 'm', 'ja', 'Hello', 'v1'), await cacheKey('openai', 'm', 'ja', 'Hello', 'v2'));
+});
