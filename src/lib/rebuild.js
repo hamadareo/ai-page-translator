@@ -1,7 +1,7 @@
 import { serializeRun, parseMarked, matchesTokens, collapse } from './extract.js';
 
 export function createDomState() {
-  return { seen: new WeakMap(), records: [], titleWritten: null, fits: new Map(), baselines: new WeakMap() };
+  return { seen: new WeakMap(), records: [], titleWritten: null, fits: new Map(), lineFits: new Map(), baselines: new WeakMap() };
 }
 
 /** 拡張機能が書いた内容のまま残っているテキストノードか */
@@ -48,7 +48,8 @@ function relaxWhiteSpace(state, el) {
   if (!relaxed || el.scrollWidth <= el.clientWidth + 1) return;
   const ratio = el.clientWidth / el.scrollWidth;
   if (ratio >= MIN_FIT_SCALE && hasNoTransform(style)) {
-    scaleElement(state, el, ratio, originFor(style));
+    // はみ出した行は中央揃えでも左端から並ぶので、左上を基準に縮める
+    scaleElement(state, el, ratio, 'top left');
     return;
   }
   const record = {
@@ -108,16 +109,20 @@ function lineCount(nodes) {
  * 高さ固定の枠から訳文があふれたら、「そのまま」「折り返す」「1行のまま」の候補を実際に測り、
  * 縮小が最も少なくて済む表示方法を選んで、枠に収まるまで縮小する
  */
+function undoFit(fits, key) {
+  const fit = fits.get(key);
+  if (!fit) return;
+  resetAttr(fit.target, fit.originalAttr);
+  fit.writtenAttr = fit.originalAttr;
+  fits.delete(key);
+}
+
 function fitBox(state, box, from, singleLineAllowed) {
   const view = box.ownerDocument.defaultView;
   if (!view?.getComputedStyle) return;
-  const previous = state.fits.get(box);
-  if (previous) {
-    // 縮小前の大きさで測り直す
-    resetAttr(previous.target, previous.originalAttr);
-    previous.writtenAttr = previous.originalAttr;
-    state.fits.delete(box);
-  }
+  // 縮小前の大きさで測り直す（行の横幅合わせは行ごと、枠の高さ合わせは枠ごとに管理する）
+  undoFit(state.fits, box);
+  undoFit(state.lineFits, from);
   const limit = Math.max(box.clientHeight, state.baselines.get(box) ?? 0);
   const fromAttr = from.getAttribute('style');
   const baseWhiteSpace = view.getComputedStyle(from).whiteSpace;
@@ -126,7 +131,7 @@ function fitBox(state, box, from, singleLineAllowed) {
     if (whiteSpace) from.style.setProperty('white-space', whiteSpace, 'important');
     const widthScale = from.scrollWidth > from.clientWidth + 1 ? from.clientWidth / from.scrollWidth : 1;
     const heightScale = limit && box.scrollHeight > limit + 2 ? limit / box.scrollHeight : 1;
-    return { whiteSpace, scale: Math.min(widthScale, heightScale) };
+    return { whiteSpace, widthScale, heightScale, scale: Math.min(widthScale, heightScale) };
   };
 
   const candidates = [tryWhiteSpace(null)];
@@ -141,12 +146,22 @@ function fitBox(state, box, from, singleLineAllowed) {
   }
   if (best.scale >= 1 || best.scale < MIN_BOX_SCALE) return;
 
+  if (best.widthScale < 1 && hasNoTransform(view.getComputedStyle(from))) {
+    // 横幅が足りない: その行自体を左上基準で縮める（はみ出した行は中央揃えでも左端から並ぶ）
+    state.lineFits.set(from, scaleElement(state, from, Math.max(best.widthScale, MIN_BOX_SCALE), 'top left'));
+  }
+
+  // 行を縮めてもまだ枠の高さからあふれるなら、枠の中身全体を縮める
+  const height = box.scrollHeight;
+  if (!limit || height <= limit + 2) return;
+  const ratio = limit / height;
+  if (ratio < MIN_BOX_SCALE) return;
   let target = null;
   for (let a = from; a && a !== box; a = a.parentElement) {
     if (hasNoTransform(view.getComputedStyle(a))) target = a;
   }
   if (!target) return;
-  state.fits.set(box, scaleElement(state, target, best.scale, originFor(view.getComputedStyle(from))));
+  state.fits.set(box, scaleElement(state, target, ratio, originFor(view.getComputedStyle(from))));
 }
 
 function restoreFit(record) {
@@ -281,5 +296,6 @@ export function restoreAll(state, doc) {
   state.seen = new WeakMap();
   state.titleWritten = null;
   state.fits = new Map();
+  state.lineFits = new Map();
   state.baselines = new WeakMap();
 }

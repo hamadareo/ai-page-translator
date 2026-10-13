@@ -287,12 +287,12 @@ test('a single line that overflows slightly is scaled down instead of wrapped', 
   assert.equal(h2.style.transformOrigin, 'top left');
 });
 
-test('the line scale origin follows the text alignment', () => {
+test('a line scaled to its width shrinks from the left, where overflowing text starts even when centered', () => {
   const { document } = makeDocument('<h2 style="white-space: nowrap; text-align: center">Contact</h2>');
   const h2 = document.querySelector('h2');
   stubOverflow(h2, 150, 100);
   applyRun(createDomState(), collectUnits(document.body)[0], 'お問い合わせ');
-  assert.equal(h2.style.transformOrigin, 'top center');
+  assert.equal(h2.style.transformOrigin, 'top left');
 });
 
 test('a line with its own transform wraps instead of being scaled', () => {
@@ -332,7 +332,16 @@ test('a short heading that would wrap in a fixed box stays on one line and is sc
   const state = createDomState();
   assert.equal(applyRun(state, collectUnits(document.body)[0], 'お問い合わせ'), 'applied');
   assert.equal(document.defaultView.getComputedStyle(h2).whiteSpace, 'nowrap');
-  assert.equal(document.getElementById('inner').style.transform, 'scale(0.667)');
+  assert.equal(h2.style.transform, 'scale(0.667)', 'width-driven: the line itself is scaled');
+  assert.equal(h2.style.transformOrigin, 'top left');
+  assert.equal(document.getElementById('inner').style.transform, '');
+});
+
+test('a centered heading scaled for height keeps a centered origin', () => {
+  const { document } = makeDocument('<div id="box" style="height: 100px"><div id="inner"><p style="text-align: center">Short</p></div></div>');
+  stubBox(document.getElementById('box'), 100);
+  applyRun(createDomState(), collectUnits(document.body)[0], 'ながいやくぶん');
+  assert.equal(document.getElementById('inner').style.transformOrigin, 'top center');
 });
 
 test('restoreAll undoes the one-line choice and its scale exactly', () => {
@@ -343,4 +352,23 @@ test('restoreAll undoes the one-line choice and its scale exactly', () => {
   applyRun(state, collectUnits(document.body)[0], 'お問い合わせ');
   restoreAll(state, document);
   assert.equal(document.body.innerHTML, html);
+});
+
+test('every overflowing line in the same box keeps its own width scale', () => {
+  const { document } = makeDocument('<div id="box" style="height: 100px"><div id="inner"><p style="white-space: nowrap">First line</p><p style="white-space: nowrap">Second line</p></div></div>');
+  const box = document.getElementById('box');
+  Object.defineProperty(box, 'clientHeight', { configurable: true, get: () => 100 });
+  Object.defineProperty(box, 'scrollHeight', { configurable: true, get: () => 100 });
+  const [p1, p2] = document.querySelectorAll('p');
+  stubOverflow(p1, 150, 100);
+  stubOverflow(p2, 125, 100);
+  const state = createDomState();
+  const units = collectUnits(document.body);
+  applyRun(state, units[0], 'いちばんめのぎょう');
+  applyRun(state, units[1], 'にばんめのぎょう');
+  assert.equal(p1.style.transform, 'scale(0.667)');
+  assert.equal(p2.style.transform, 'scale(0.8)');
+  restoreAll(state, document);
+  assert.equal(p1.getAttribute('style'), 'white-space: nowrap');
+  assert.equal(p2.getAttribute('style'), 'white-space: nowrap');
 });
