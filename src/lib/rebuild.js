@@ -9,6 +9,37 @@ export function isOwnText(state, node) {
   return state.seen.get(node) === node.data;
 }
 
+/** 自動で折り返さない指定のまま訳文が枠からはみ出したら、折り返しを許可する */
+const RELAXED_WHITE_SPACE = { nowrap: 'normal', pre: 'pre-wrap' };
+
+function relaxWhiteSpace(state, el) {
+  const view = el.ownerDocument.defaultView;
+  const relaxed = RELAXED_WHITE_SPACE[view?.getComputedStyle?.(el).whiteSpace];
+  if (!relaxed || el.scrollWidth <= el.clientWidth + 1) return;
+  const record = {
+    kind: 'style',
+    el,
+    originalAttr: el.getAttribute('style'),
+    value: el.style.getPropertyValue('white-space'),
+    priority: el.style.getPropertyPriority('white-space'),
+  };
+  el.style.setProperty('white-space', relaxed, 'important');
+  record.writtenAttr = el.getAttribute('style');
+  state.records.push(record);
+}
+
+function restoreStyle(record) {
+  const { el, originalAttr, writtenAttr, value, priority } = record;
+  // ページ側がその後スタイルを変えていなければ、元の属性文字列をそのまま戻す
+  if (el.getAttribute('style') === writtenAttr) {
+    if (originalAttr === null) el.removeAttribute('style');
+    else el.setAttribute('style', originalAttr);
+    return;
+  }
+  if (value) el.style.setProperty('white-space', value, priority);
+  else el.style.removeProperty('white-space');
+}
+
 function isRunIntact(unit) {
   return unit.nodes.every((n, i) => n.parentNode === unit.parent && (i === 0 || unit.nodes[i - 1].nextSibling === n));
 }
@@ -68,6 +99,7 @@ export function applyRun(state, unit, translated) {
 
   for (const t of written) state.seen.set(t, t.data);
   state.records.push({ kind: 'run', parent: unit.parent, originals: unit.nodes.slice(), elementChildren, current: top, reused });
+  relaxWhiteSpace(state, unit.parent);
   return 'applied';
 }
 
@@ -113,6 +145,7 @@ export function restoreAll(state, doc) {
   for (const record of state.records.reverse()) {
     try {
       if (record.kind === 'run') restoreRun(doc, record);
+      else if (record.kind === 'style') restoreStyle(record);
       else if (record.kind === 'text' && record.node.data === record.written) record.node.data = record.original;
       else if (record.kind === 'title' && doc.title === record.written) doc.title = record.original;
     } catch {

@@ -153,3 +153,52 @@ test('applyRun works for units collected with ignoreTranslateNo', () => {
   assert.equal(applyRun(state, unit, 'こんにちは <g0>世界</g0>'), 'applied');
   assert.equal(document.querySelector('p').innerHTML, 'こんにちは <b>世界</b>');
 });
+
+function stubOverflow(el, scrollWidth, clientWidth) {
+  Object.defineProperty(el, 'scrollWidth', { configurable: true, get: () => scrollWidth });
+  Object.defineProperty(el, 'clientWidth', { configurable: true, get: () => clientWidth });
+}
+
+test('a nowrap paragraph that overflows after translation is allowed to wrap', () => {
+  const { document } = makeDocument('<p style="white-space: nowrap">Continuous Fall<br>Detection</p>');
+  const p = document.querySelector('p');
+  stubOverflow(p, 500, 100);
+  const state = createDomState();
+  const [unit] = collectUnits(document.body);
+  assert.equal(applyRun(state, unit, '連続的な<x0/>転倒検出'), 'applied');
+  assert.equal(p.style.getPropertyValue('white-space'), 'normal');
+  assert.equal(p.style.getPropertyPriority('white-space'), 'important');
+});
+
+test('nowrap text that still fits is left alone', () => {
+  const { document } = makeDocument('<p style="white-space: nowrap">Home</p>');
+  const p = document.querySelector('p');
+  stubOverflow(p, 80, 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'ホーム');
+  assert.equal(p.style.getPropertyValue('white-space'), 'nowrap');
+});
+
+test('white-space: pre becomes pre-wrap when it overflows', () => {
+  const { document } = makeDocument('<div style="white-space: pre">Long line here</div>');
+  const div = document.querySelector('div');
+  stubOverflow(div, 500, 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'とても長い行');
+  assert.equal(div.style.getPropertyValue('white-space'), 'pre-wrap');
+});
+
+test('restoreAll removes the wrap fix and restores the exact markup', () => {
+  const html = '<p class="k">One<br>Two</p><div style="color: red; white-space: nowrap">Three</div>';
+  const { document } = makeDocument(`<style>.k { white-space: nowrap; }</style>${html}`);
+  const [p, div] = [document.querySelector('p'), document.querySelector('div')];
+  stubOverflow(p, 500, 100);
+  stubOverflow(div, 500, 100);
+  const state = createDomState();
+  const units = collectUnits(document.body);
+  assert.equal(applyRun(state, units[0], '一<x0/>二'), 'applied');
+  assert.equal(applyRun(state, units[1], '三'), 'applied');
+  assert.equal(p.style.getPropertyValue('white-space'), 'normal', 'stylesheet nowrap is detected too');
+  restoreAll(state, document);
+  assert.equal(document.body.innerHTML, `<style>.k { white-space: nowrap; }</style>${html}`);
+});
