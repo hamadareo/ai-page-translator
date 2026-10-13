@@ -11,6 +11,7 @@ export function createPageTranslator({
   sendMessage,
   onStatus = () => {},
   debounceMs = 500,
+  maxWaitMs = 2000,
   MutationObserverImpl = globalThis.MutationObserver,
   isInViewport = () => true,
 }) {
@@ -20,6 +21,7 @@ export function createPageTranslator({
   let config = null;
   let observer = null;
   let timer = null;
+  let firstPendingAt = null;
   let queue = Promise.resolve();
   // 送信済み（翻訳待ち・失敗含む）の原文。「翻訳」を押し直すたびにリセットして失敗分を再試行する
   let claimed = new WeakMap();
@@ -33,6 +35,12 @@ export function createPageTranslator({
   const isSettledNodes = (nodes) => nodes.every((n) => isOwnText(dom, n) || claimed.get(n) === n.data);
   const isSettledTitle = (title) => title === dom.titleWritten || title === claimedTitle;
 
+  function unclaim(unit) {
+    if (unit.kind === 'run') for (const n of unit.textNodes) claimed.delete(n);
+    else if (unit.kind === 'text') claimed.delete(unit.node);
+    else claimedTitle = null;
+  }
+
   function claim(unit) {
     if (unit.kind === 'run') for (const n of unit.textNodes) claimed.set(n, n.data);
     else if (unit.kind === 'text') claimed.set(unit.node, unit.node.data);
@@ -45,9 +53,16 @@ export function createPageTranslator({
     return applyTitle(dom, document, unit, translated);
   }
 
+  /** デバウンスしつつ、変化が続いても maxWaitMs 以内には必ず走査する */
   function scheduleScan(id) {
+    const now = Date.now();
+    firstPendingAt ??= now;
     clearTimeout(timer);
-    timer = setTimeout(() => scan(id), debounceMs);
+    const delay = Math.max(0, Math.min(debounceMs, firstPendingAt + maxWaitMs - now));
+    timer = setTimeout(() => {
+      firstPendingAt = null;
+      scan(id);
+    }, delay);
   }
 
   function startObserver(id) {
@@ -60,6 +75,7 @@ export function createPageTranslator({
     observer?.disconnect();
     observer = null;
     clearTimeout(timer);
+    firstPendingAt = null;
   }
 
   /** 自分の DOM 書き換えを監視対象にしない */
@@ -107,6 +123,11 @@ export function createPageTranslator({
             const result = apply(unit, translated);
             if (result === 'failed') failed++;
             else if (result === 'mismatch') fallback.push(...textUnitsOf(unit));
+            else if (result === 'stale') {
+              // 翻訳中にページが段落を変えた。次の走査で拾い直す
+              unclaim(unit);
+              scheduleScan(id);
+            }
           });
         });
         emit({ done: status.done + batch.length, failed: status.failed + failed });
@@ -127,7 +148,8 @@ export function createPageTranslator({
       if (title) units.unshift(title);
       if (units.length) {
         units.forEach(claim);
-        units.sort((a, b) => Number(isInViewport(b)) - Number(isInViewport(a)));
+        const visible = new Map(units.map((u) => [u, isInViewport(u)]));
+        units.sort((a, b) => Number(visible.get(b)) - Number(visible.get(a)));
         emit({ state: 'translating', total: status.total + units.length });
         await translateUnits(id, units);
       }
@@ -143,7 +165,8 @@ export function createPageTranslator({
   }
 
   async function translate() {
-    if (status.state === 'translating' || status.state === 'done') return status;
+    // 完了済みでも失敗分があれば押し直しで再試行できる
+    if (status.state === 'translating' || (status.state === 'done' && !status.failed)) return status;
     const id = ++session;
     claimed = new WeakMap();
     claimedTitle = null;

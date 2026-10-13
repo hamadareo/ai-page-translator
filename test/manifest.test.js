@@ -12,7 +12,7 @@ test('manifest is MV3 and references existing files', () => {
     assert.ok(existsSync(join(root, path)), `${path} missing`);
   }
   assert.equal(manifest.background.type, 'module');
-  assert.deepEqual(manifest.permissions.sort(), ['activeTab', 'scripting', 'storage']);
+  assert.deepEqual(manifest.permissions.sort(), ['activeTab', 'scripting', 'storage', 'unlimitedStorage']);
   for (const host of ['https://api.openai.com/*', 'https://api.anthropic.com/*', 'https://generativelanguage.googleapis.com/*', 'http://localhost/*', 'http://127.0.0.1/*']) {
     assert.ok(manifest.host_permissions.includes(host), `${host} missing`);
   }

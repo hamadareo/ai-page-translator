@@ -141,9 +141,10 @@ export function parseMarked(str) {
     } else if (type === 'x') {
       stack.at(-1).children.push({ type: 'x', id });
     } else {
+      if (selfClosing) throw new Error(`self-closing <${type}${id}/>`);
       const node = { type, id, children: [] };
       stack.at(-1).children.push(node);
-      if (!selfClosing) stack.push(node);
+      stack.push(node);
     }
   }
   pushText(str.slice(last));

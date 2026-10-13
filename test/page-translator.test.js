@@ -12,7 +12,7 @@ async function waitFor(cond, ms = 1000) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function setup(html) {
+function setup(html, options = {}) {
   const { window, document } = makeDocument(html, { title: 'Hello page' });
   const ctl = { failWith: null, translate: (t) => `[ja]${t}` };
   const batches = [];
@@ -27,9 +27,9 @@ function setup(html) {
   };
   const statuses = [];
   const pt = createPageTranslator({
-    document, sendMessage, onStatus: (s) => statuses.push(s), debounceMs: 10, MutationObserverImpl: window.MutationObserver,
+    document, sendMessage, onStatus: (s) => statuses.push(s), debounceMs: 10, MutationObserverImpl: window.MutationObserver, ...options,
   });
-  return { document, pt, ctl, batches, statuses };
+  return { window, document, pt, ctl, batches, statuses };
 }
 
 test('translates body and title, keeping elements', async () => {
@@ -154,5 +154,62 @@ test('translate while already running is a no-op', async () => {
   const { pt, batches } = setup('<p>One</p>');
   await Promise.all([pt.translate(), pt.translate()]);
   assert.equal(batches.length, 1);
+  pt.stop();
+});
+
+test('re-translates when the page writes to the original text node it holds', async () => {
+  const { document, pt } = setup('<p>First</p><p>0 items</p>');
+  const ref = document.querySelectorAll('p')[1].firstChild; // a framework keeps this reference
+  await pt.translate();
+  assert.equal(ref.data, '[ja]0 items');
+  ref.data = '3 items';
+  await waitFor(() => ref.data === '[ja]3 items');
+  pt.stop();
+});
+
+test('content added while the page keeps mutating is still translated', async () => {
+  const { window, document, pt } = setup('<p>First</p><span id="clock">notranslate</span>', { debounceMs: 50, maxWaitMs: 100 });
+  document.getElementById('clock').className = 'notranslate';
+  await pt.translate();
+  let n = 0;
+  const ticker = window.setInterval(() => { document.getElementById('clock').textContent = String(n++); }, 5);
+  const p = document.createElement('p');
+  p.textContent = 'Later';
+  document.body.append(p);
+  try {
+    await waitFor(() => p.textContent === '[ja]Later', 600);
+  } finally {
+    window.clearInterval(ticker);
+    pt.stop();
+  }
+});
+
+test('translate again after partial failures retries the failed paragraphs', async () => {
+  const { document, pt, ctl } = setup('<p>One</p>');
+  ctl.failWith = { kind: 'rate_limit', message: 'slow' };
+  const first = await pt.translate();
+  assert.equal(first.state, 'done');
+  assert.equal(first.failed, 2);
+  ctl.failWith = null;
+  const second = await pt.translate();
+  assert.equal(second.failed, 0);
+  assert.equal(document.querySelector('p').textContent, '[ja]One');
+  pt.stop();
+});
+
+test('a paragraph that changed structure mid-translation is translated later', async () => {
+  const { document, pt, ctl } = setup('<p id="p">Hello <b>there</b></p>');
+  const p = document.getElementById('p');
+  let inserted = false;
+  ctl.translate = (t) => {
+    if (!inserted && t === 'Hello <g0>there</g0>') {
+      inserted = true;
+      p.insertBefore(document.createElement('img'), p.querySelector('b'));
+    }
+    return `[ja]${t}`;
+  };
+  await pt.translate();
+  await waitFor(() => p.textContent.startsWith('[ja]Hello'));
+  assert.ok(p.querySelector('img'));
   pt.stop();
 });

@@ -100,3 +100,48 @@ test('applyTitle is stale when the page retitled itself and failed on empty outp
   document.title = 'Other';
   assert.equal(applyTitle(state, document, unit, 'ページ'), 'stale');
 });
+
+test('applyRun keeps the original text nodes so framework references stay attached', () => {
+  const { document, state, units } = setup('<p>Hello <b>world</b> again</p>');
+  const p = document.querySelector('p');
+  const [hello, again] = [p.firstChild, p.lastChild];
+  const world = p.querySelector('b').firstChild;
+  assert.equal(applyRun(state, units[0], '<g0>世界</g0>こんにちは'), 'applied');
+  assert.equal(p.innerHTML, '<b>世界</b>こんにちは');
+  assert.equal(world.parentNode, p.querySelector('b'));
+  assert.equal(world.data, '世界');
+  assert.equal(hello.parentNode, p, 'reused for the first piece');
+  assert.equal(again.parentNode, p, 'unused original stays attached, emptied');
+  assert.equal(again.data, '');
+  assert.doesNotThrow(() => p.removeChild(again));
+  assert.doesNotThrow(() => p.insertBefore(document.createTextNode('x'), hello));
+});
+
+test('restoreAll puts reused text back unless the page rewrote it', () => {
+  const { document, state, units } = setup('<p>One</p><p>Two</p>');
+  const [one, two] = [...document.querySelectorAll('p')].map((p) => p.firstChild);
+  applyRun(state, units[0], '一');
+  applyRun(state, units[1], '二');
+  two.data = 'Fresh';
+  restoreAll(state, document);
+  assert.equal(one.data, 'One');
+  assert.equal(two.data, 'Fresh');
+});
+
+test('self-closing g output is a mismatch, not an emptied link', () => {
+  const { document, state, units } = setup('<p>Go <a href="/x">home</a></p>');
+  assert.equal(applyRun(state, units[0], '<g0/>へ行く'), 'mismatch');
+  assert.equal(document.querySelector('a').textContent, 'home');
+});
+
+test('restoreAll keeps going when one record cannot be restored', () => {
+  const { document, state, units } = setup('<p id="a">Click <a>here</a></p><p id="b">Two</p>');
+  applyRun(state, units[0], '<g0>ここ</g0>をクリック');
+  applyRun(state, units[1], '二');
+  const pa = document.getElementById('a');
+  const link = pa.querySelector('a');
+  link.remove();
+  link.appendChild(pa); // the page nests the paragraph inside its own link
+  assert.doesNotThrow(() => restoreAll(state, document));
+  assert.equal(document.getElementById('b').textContent, 'Two');
+});

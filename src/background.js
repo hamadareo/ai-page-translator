@@ -18,9 +18,21 @@ function assertValid(settings) {
   if (invalid) throw new TranslationError('config', invalid);
 }
 
+// 応答待ちの間に service worker がアイドル終了されないよう、拡張機能 API を定期的に呼ぶ
+let inFlight = 0;
+let keepAliveTimer = null;
+async function keepAlive(work) {
+  if (inFlight++ === 0) keepAliveTimer = setInterval(() => chrome.runtime.getPlatformInfo(), 20000);
+  try {
+    return await work();
+  } finally {
+    if (--inFlight === 0) clearInterval(keepAliveTimer);
+  }
+}
+
 const handlers = {
   async translateBatch({ texts }) {
-    return { translations: await translateTexts(texts) };
+    return { translations: await keepAlive(() => translateTexts(texts)) };
   },
   async getConfig() {
     const s = await loadSettings(storage);

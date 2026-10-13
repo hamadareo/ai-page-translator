@@ -90,7 +90,8 @@ test('parseMarked builds a tree and unescapes text', () => {
     { type: 'g', id: 1, children: [{ type: 'text', value: 'y ' }, { type: 'x', id: 0 }] },
     { type: 'text', value: ' <z>' },
   ]);
-  assert.deepEqual(parseMarked('<g0/>'), [{ type: 'g', id: 0, children: [] }]);
+  assert.throws(() => parseMarked('<g0/>'), 'self-closing g would empty the element');
+  assert.throws(() => parseMarked('<c0/>'));
 });
 
 test('parseMarked rejects broken structure', () => {

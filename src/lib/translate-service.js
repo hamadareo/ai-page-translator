@@ -46,7 +46,13 @@ export function createTranslateService({ getSettings, cache, limiter, call = cal
       result[index] = translated[j];
       if (translated[j] != null) entries.push({ key: keys[index], value: translated[j] });
     });
-    if (entries.length) await cache.setMany(entries);
+    if (entries.length) {
+      try {
+        await cache.setMany(entries);
+      } catch {
+        // 保存に失敗しても訳文は返す（キャッシュは最適化にすぎない）
+      }
+    }
     return result;
   };
 }

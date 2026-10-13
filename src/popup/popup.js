@@ -16,7 +16,7 @@ function render(status) {
   $('status').textContent = (status && statusText(status)) || '待機中';
   $('status').classList.toggle('error', status?.state === 'error');
   const active = status?.state === 'translating' || status?.state === 'done';
-  $('translate').disabled = active;
+  $('translate').disabled = status?.state === 'translating' || (status?.state === 'done' && !status.failed);
   $('stop').disabled = !active;
 }
 

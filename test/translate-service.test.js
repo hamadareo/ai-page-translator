@@ -89,3 +89,16 @@ test('translateWithSplit returns [] for empty input without calling', async () =
   assert.deepEqual(await translateWithSplit([], async () => { called = true; return []; }), []);
   assert.equal(called, false);
 });
+
+test('a failing cache write does not lose translations', async () => {
+  const storage = createFakeStorage();
+  storage.set = async () => { throw new Error('QUOTA_BYTES quota exceeded'); };
+  const translate = createTranslateService({
+    getSettings: async () => settings,
+    cache: createCache(storage),
+    limiter: createLimiter(1),
+    call: upper,
+    sleep: async () => {},
+  });
+  assert.deepEqual(await translate(['a']), ['A']);
+});
