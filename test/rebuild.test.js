@@ -202,3 +202,68 @@ test('restoreAll removes the wrap fix and restores the exact markup', () => {
   restoreAll(state, document);
   assert.equal(document.body.innerHTML, `<style>.k { white-space: nowrap; }</style>${html}`);
 });
+
+/** jsdom has no layout: pretend the box content is 20px tall per character and the box is `height` tall. */
+function stubBox(box, height) {
+  Object.defineProperty(box, 'clientHeight', { configurable: true, get: () => height });
+  Object.defineProperty(box, 'scrollHeight', { configurable: true, get: () => box.textContent.length * 20 });
+}
+
+test('content that overflows a fixed-height box after translation is scaled to fit', () => {
+  const { document } = makeDocument('<div id="box" style="height: 100px"><div id="inner"><p>Short</p></div></div>');
+  stubBox(document.getElementById('box'), 100);
+  const state = createDomState();
+  assert.equal(applyRun(state, collectUnits(document.body)[0], 'ながいやくぶん'), 'applied');
+  const inner = document.getElementById('inner');
+  assert.equal(inner.style.transform, 'scale(0.714)');
+  assert.equal(inner.style.transformOrigin, 'top left');
+});
+
+test('overflow that existed before translation is not counted', () => {
+  const { document } = makeDocument('<div id="box" style="height: 50px"><div id="inner"><p>Short</p></div></div>');
+  stubBox(document.getElementById('box'), 50);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'ながい');
+  assert.equal(document.getElementById('inner').style.transform, '');
+});
+
+test('no scaling when it would need to shrink below 60%', () => {
+  const { document } = makeDocument('<div id="box" style="height: 100px"><div id="inner"><p>Short</p></div></div>');
+  stubBox(document.getElementById('box'), 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'とてもながいやくぶん');
+  assert.equal(document.getElementById('inner').style.transform, '');
+});
+
+test('an element that already has a transform is never overwritten', () => {
+  const { document } = makeDocument('<div id="box" style="height: 100px"><div id="inner" style="transform: rotate(1deg)"><p style="text-align: center">Short</p></div></div>');
+  stubBox(document.getElementById('box'), 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'ながいやくぶん');
+  assert.equal(document.getElementById('inner').style.transform, 'rotate(1deg)');
+  const p = document.querySelector('p');
+  assert.equal(p.style.transform, 'scale(0.714)');
+  assert.equal(p.style.transformOrigin, 'top center');
+});
+
+test('the scale is recomputed when another paragraph in the same box is translated', () => {
+  const { document } = makeDocument('<div id="box" style="height: 120px"><div id="inner"><p>One</p><p>Two</p></div></div>');
+  stubBox(document.getElementById('box'), 120);
+  const state = createDomState();
+  const units = collectUnits(document.body);
+  applyRun(state, units[0], 'いちいちいちい');
+  assert.equal(document.getElementById('inner').style.transform, 'scale(0.6)');
+  applyRun(state, units[1], 'にに');
+  assert.equal(document.getElementById('inner').style.transform, 'scale(0.667)');
+});
+
+test('restoreAll removes the fit scaling and restores the exact markup', () => {
+  const html = '<div id="box" style="height: 100px"><div id="inner" class="c"><p>Short</p></div></div>';
+  const { document } = makeDocument(html);
+  stubBox(document.getElementById('box'), 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'ながいやくぶん');
+  assert.notEqual(document.body.innerHTML, html);
+  restoreAll(state, document);
+  assert.equal(document.body.innerHTML, html);
+});

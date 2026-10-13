@@ -1,7 +1,7 @@
 import { serializeRun, parseMarked, matchesTokens, collapse } from './extract.js';
 
 export function createDomState() {
-  return { seen: new WeakMap(), records: [], titleWritten: null };
+  return { seen: new WeakMap(), records: [], titleWritten: null, fits: new Map(), baselines: new WeakMap() };
 }
 
 /** 拡張機能が書いた内容のまま残っているテキストノードか */
@@ -40,6 +40,62 @@ function restoreStyle(record) {
   else el.style.removeProperty('white-space');
 }
 
+/** 高さ固定の枠（Canva などのサイトビルダー）からあふれた訳文を、収まる比率で縮小する */
+const MIN_FIT_SCALE = 0.6;
+const FIT_SEARCH_DEPTH = 10;
+
+function findFixedBox(el) {
+  for (let a = el, d = 0; a && d < FIT_SEARCH_DEPTH; a = a.parentElement, d++) {
+    if (a.style?.height) return a;
+  }
+  return null;
+}
+
+function resetAttr(el, attr) {
+  if (attr === null) el.removeAttribute('style');
+  else el.setAttribute('style', attr);
+}
+
+function fitBox(state, box, from) {
+  const view = box.ownerDocument.defaultView;
+  if (!view?.getComputedStyle) return;
+  const previous = state.fits.get(box);
+  if (previous) {
+    // 縮小前の大きさで測り直す
+    resetAttr(previous.target, previous.originalAttr);
+    previous.writtenAttr = previous.originalAttr;
+    state.fits.delete(box);
+  }
+  const limit = Math.max(box.clientHeight, state.baselines.get(box) ?? 0);
+  const height = box.scrollHeight;
+  if (!limit || height <= limit + 2) return;
+  const ratio = limit / height;
+  if (ratio < MIN_FIT_SCALE) return;
+
+  let target = null;
+  for (let a = from; a && a !== box; a = a.parentElement) {
+    if (view.getComputedStyle(a).transform === 'none') target = a;
+  }
+  if (!target) return;
+
+  const align = view.getComputedStyle(from).textAlign;
+  const origin = align === 'center' ? 'top center' : align === 'right' || align === 'end' ? 'top right' : 'top left';
+  const record = { kind: 'fit', target, originalAttr: target.getAttribute('style') };
+  target.style.setProperty('transform', `scale(${Number(ratio.toFixed(3))})`);
+  target.style.setProperty('transform-origin', origin);
+  record.writtenAttr = target.getAttribute('style');
+  state.fits.set(box, record);
+  state.records.push(record);
+}
+
+function restoreFit(record) {
+  const { target, originalAttr, writtenAttr } = record;
+  if (writtenAttr === originalAttr) return;
+  if (target.getAttribute('style') === writtenAttr) return resetAttr(target, originalAttr);
+  target.style.removeProperty('transform');
+  target.style.removeProperty('transform-origin');
+}
+
 function isRunIntact(unit) {
   return unit.nodes.every((n, i) => n.parentNode === unit.parent && (i === 0 || unit.nodes[i - 1].nextSibling === n));
 }
@@ -58,6 +114,8 @@ export function applyRun(state, unit, translated) {
   if (!tree.length || !matchesTokens(tree, tokens)) return 'mismatch';
 
   const doc = unit.parent.ownerDocument;
+  const box = findFixedBox(unit.parent);
+  if (box && !state.baselines.has(box)) state.baselines.set(box, box.scrollHeight);
   const elementChildren = tokens
     .filter((t) => t.type !== 'x')
     .map((t) => ({ node: t.node, children: [...t.node.childNodes] }));
@@ -100,6 +158,7 @@ export function applyRun(state, unit, translated) {
   for (const t of written) state.seen.set(t, t.data);
   state.records.push({ kind: 'run', parent: unit.parent, originals: unit.nodes.slice(), elementChildren, current: top, reused });
   relaxWhiteSpace(state, unit.parent);
+  if (box) fitBox(state, box, unit.parent);
   return 'applied';
 }
 
@@ -146,6 +205,7 @@ export function restoreAll(state, doc) {
     try {
       if (record.kind === 'run') restoreRun(doc, record);
       else if (record.kind === 'style') restoreStyle(record);
+      else if (record.kind === 'fit') restoreFit(record);
       else if (record.kind === 'text' && record.node.data === record.written) record.node.data = record.original;
       else if (record.kind === 'title' && doc.title === record.written) doc.title = record.original;
     } catch {
@@ -155,4 +215,6 @@ export function restoreAll(state, doc) {
   state.records = [];
   state.seen = new WeakMap();
   state.titleWritten = null;
+  state.fits = new Map();
+  state.baselines = new WeakMap();
 }
