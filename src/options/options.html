@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>AI Page Translator 設定</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>AI Page Translator 設定</h1>
+    <form id="form" novalidate>
+      <label>プロバイダ <select name="provider" id="provider"></select></label>
+
+      <fieldset data-provider="openai">
+        <legend>OpenAI</legend>
+        <label>APIキー <input name="providers.openai.apiKey" type="password" autocomplete="off"></label>
+        <label>モデル <input name="providers.openai.model"></label>
+      </fieldset>
+
+      <fieldset data-provider="anthropic">
+        <legend>Anthropic (Claude)</legend>
+        <label>APIキー <input name="providers.anthropic.apiKey" type="password" autocomplete="off"></label>
+        <label>モデル <input name="providers.anthropic.model"></label>
+        <p class="hint">例: claude-opus-5-5（既定・高品質）、claude-haiku-5-5（低コスト）</p>
+      </fieldset>
+
+      <fieldset data-provider="gemini">
+        <legend>Google Gemini</legend>
+        <label>APIキー <input name="providers.gemini.apiKey" type="password" autocomplete="off"></label>
+        <label>モデル <input name="providers.gemini.model"></label>
+      </fieldset>
+
+      <fieldset data-provider="compat">
+        <legend>OpenAI互換 / ローカルLLM</legend>
+        <label>ベースURL <input name="providers.compat.baseUrl" placeholder="http://localhost:11434/v1"></label>
+        <label>APIキー（任意） <input name="providers.compat.apiKey" type="password" autocomplete="off"></label>
+        <label>モデル <input name="providers.compat.model"></label>
+        <label class="check"><input name="providers.compat.jsonMode" type="checkbox"> JSONモードを使う（response_format）</label>
+        <p class="hint">Ollama: <code>http://localhost:11434/v1</code> / LM Studio: <code>http://localhost:1234/v1</code></p>
+        <p class="hint">Ollama で 403 になる場合は、環境変数 <code>OLLAMA_ORIGINS=chrome-extension://*</code> を設定して Ollama を再起動してください。</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>翻訳</legend>
+        <label>翻訳先言語 <input name="targetLang" required></label>
+        <label>1バッチの最大段落数 <input name="maxUnitsPerBatch" type="number" min="1" max="200" required></label>
+        <label>1バッチの最大文字数 <input name="maxCharsPerBatch" type="number" min="200" max="20000" required></label>
+        <label>同時リクエスト数 <input name="concurrency" type="number" min="1" max="10" required></label>
+      </fieldset>
+
+      <div class="buttons">
+        <button type="submit" class="primary">保存</button>
+        <button type="button" id="test">接続テスト</button>
+        <button type="button" id="clear-cache">キャッシュを消去</button>
+      </div>
+      <p id="message" role="status" aria-live="polite"></p>
+    </form>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
