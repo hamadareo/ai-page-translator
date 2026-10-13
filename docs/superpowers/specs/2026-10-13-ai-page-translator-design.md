@@ -69,10 +69,10 @@ options ──(chrome.storage)──▶ background
 - 一致した場合: 元の要素オブジェクトを再利用し（子テキストのみ入れ替え）、訳文の順序で並べ直す。属性・イベントリスナーは保持される。
 - 不一致の場合: その単位を構成するテキストノードを個別の単位として再翻訳し、各テキストノードの値を置き換える（フォールバック）。
 - 置換前の子ノード配列を `WeakMap<Element, Node[]>` に保存（ランの場合は親要素とランの範囲を保持）。`document.title` は元の文字列を保持。
-- 翻訳済み要素には `data-apt-translated` 属性を付与する。
+- 拡張機能が書いたテキストノードとその内容を `WeakMap<Text, string>` で記録する（ページの DOM に属性は追加しない）。
 
 ### 5.4 原文に戻す
-保存した子ノード配列で置き換え、`data-apt-translated` を除去、タイトルを復元する。jsdom テストで、翻訳→復元後の `innerHTML` が元と一致することを確認する。
+保存した子ノード配列で置き換え、記録を消去し、タイトルを復元する。jsdom テストで、翻訳→復元後の `innerHTML` が元と一致することを確認する。
 
 ### 5.5 翻訳順序とバッチ
 - 画面内（`getBoundingClientRect` がビューポートと交差）の単位を先に、残りを文書順に。
@@ -81,7 +81,7 @@ options ──(chrome.storage)──▶ background
 ### 5.6 動的コンテンツ
 - 翻訳中状態（「原文に戻す」を押すまで）は `MutationObserver`（`childList`, `subtree`, `characterData`）で監視。
 - 変更は 500ms のデバウンスでまとめ、未翻訳の単位のみ抽出して翻訳する。
-- 自身の DOM 書き換え中は observer を `disconnect` し、終了後に再接続する。`data-apt-translated` の付いた単位で、内容が自身の書いた訳文と異なる（ページ側が書き換えた）場合は再翻訳対象にする。
+- 自身の DOM 書き換え中は observer を `disconnect` し、終了後に再接続する。記録したテキストノードの内容が自身の書いた訳文と異なる（ページ側が書き換えた）場合は再翻訳対象にする。送信済みの原文も別の `WeakMap` で記録して二重送信を防ぎ、「翻訳」を押し直したときはこの記録をリセットして失敗分を再試行する。
 
 ### 5.7 状態表示
 ページ右下に Shadow DOM で隔離した小さな表示を出す。「翻訳中 12/40」「完了」「n件失敗」「エラー: APIキーを確認してください」等。完了後数秒で自動的に薄く小さくなり、エラー時は閉じるまで残る。
@@ -111,7 +111,7 @@ translate(texts, targetLang, config, { fetch, signal })
 | OpenAI互換 | `{baseUrl}/chat/completions` | キー任意（あれば Bearer） | 既定では送らない（設定で ON 可） |
 
 - `openai-compatible.js` は `openai.js` のリクエスト組み立て／解析を再利用し、URL・認証・JSON 指定の有無だけ変える。
-- モデル名は自由入力。既定値は実装時点の各社の最新モデル名を確認して設定する。OpenAI互換の既定はベース URL `http://localhost:11434/v1`（Ollama）。
+- モデル名は自由入力。既定値は OpenAI `gpt-5.5`、Anthropic `claude-opus-5-5`、Gemini `gemini-3.8-flash`、OpenAI互換 `llama3.2`（2026-10 時点で確認）。OpenAI互換の既定はベース URL `http://localhost:11434/v1`（Ollama）。
 - `max_tokens` 等の出力上限は、入力文字数から十分な値を算出して設定する（Anthropic は必須）。
 
 ### 6.4 権限
@@ -151,7 +151,7 @@ translate(texts, targetLang, config, { fetch, signal })
 | targetLang | `日本語` |
 | maxUnitsPerBatch / maxCharsPerBatch | 40 / 3000 |
 | concurrency | 3 |
-| compatJsonMode | false |
+| providers.compat.jsonMode | false |
 
 保存先は `chrome.storage.local`（API キーは端末外へは各プロバイダへのリクエスト以外で送信しない）。
 
