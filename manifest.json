@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "AI Page Translator",
+  "version": "0.1.0",
+  "description": "生成AI（OpenAI / Claude / Gemini / ローカルLLM）でWebページ全体を翻訳します",
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "AI Page Translator"
+  },
+  "options_page": "src/options/options.html",
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/lib/*.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
