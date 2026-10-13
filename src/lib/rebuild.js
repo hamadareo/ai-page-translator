@@ -9,13 +9,48 @@ export function isOwnText(state, node) {
   return state.seen.get(node) === node.data;
 }
 
-/** 自動で折り返さない指定のまま訳文が枠からはみ出したら、折り返しを許可する */
+const MIN_FIT_SCALE = 0.6;
+const FIT_SEARCH_DEPTH = 10;
 const RELAXED_WHITE_SPACE = { nowrap: 'normal', pre: 'pre-wrap' };
 
+const hasNoTransform = (style) => !style.transform || style.transform === 'none';
+
+function resetAttr(el, attr) {
+  if (attr === null) el.removeAttribute('style');
+  else el.setAttribute('style', attr);
+}
+
+function originFor(style) {
+  const align = style.textAlign;
+  if (align === 'center') return 'top center';
+  if (align === 'right' || align === 'end') return 'top right';
+  return 'top left';
+}
+
+/** 要素を ratio 倍に縮小し、復元用の記録を返す */
+function scaleElement(state, el, ratio, origin) {
+  const record = { kind: 'fit', target: el, originalAttr: el.getAttribute('style') };
+  el.style.setProperty('transform', `scale(${Number(ratio.toFixed(3))})`);
+  el.style.setProperty('transform-origin', origin);
+  record.writtenAttr = el.getAttribute('style');
+  state.records.push(record);
+  return record;
+}
+
+/**
+ * 自動で折り返さない指定のまま訳文が横にはみ出したら、
+ * 少しなら縮小して1行に収め、大きくはみ出すなら折り返しを許可する
+ */
 function relaxWhiteSpace(state, el) {
   const view = el.ownerDocument.defaultView;
-  const relaxed = RELAXED_WHITE_SPACE[view?.getComputedStyle?.(el).whiteSpace];
+  const style = view?.getComputedStyle?.(el);
+  const relaxed = RELAXED_WHITE_SPACE[style?.whiteSpace];
   if (!relaxed || el.scrollWidth <= el.clientWidth + 1) return;
+  const ratio = el.clientWidth / el.scrollWidth;
+  if (ratio >= MIN_FIT_SCALE && hasNoTransform(style)) {
+    scaleElement(state, el, ratio, originFor(style));
+    return;
+  }
   const record = {
     kind: 'style',
     el,
@@ -41,19 +76,12 @@ function restoreStyle(record) {
 }
 
 /** 高さ固定の枠（Canva などのサイトビルダー）からあふれた訳文を、収まる比率で縮小する */
-const MIN_FIT_SCALE = 0.6;
-const FIT_SEARCH_DEPTH = 10;
 
 function findFixedBox(el) {
   for (let a = el, d = 0; a && d < FIT_SEARCH_DEPTH; a = a.parentElement, d++) {
     if (a.style?.height) return a;
   }
   return null;
-}
-
-function resetAttr(el, attr) {
-  if (attr === null) el.removeAttribute('style');
-  else el.setAttribute('style', attr);
 }
 
 function fitBox(state, box, from) {
@@ -74,18 +102,10 @@ function fitBox(state, box, from) {
 
   let target = null;
   for (let a = from; a && a !== box; a = a.parentElement) {
-    if (view.getComputedStyle(a).transform === 'none') target = a;
+    if (hasNoTransform(view.getComputedStyle(a))) target = a;
   }
   if (!target) return;
-
-  const align = view.getComputedStyle(from).textAlign;
-  const origin = align === 'center' ? 'top center' : align === 'right' || align === 'end' ? 'top right' : 'top left';
-  const record = { kind: 'fit', target, originalAttr: target.getAttribute('style') };
-  target.style.setProperty('transform', `scale(${Number(ratio.toFixed(3))})`);
-  target.style.setProperty('transform-origin', origin);
-  record.writtenAttr = target.getAttribute('style');
-  state.fits.set(box, record);
-  state.records.push(record);
+  state.fits.set(box, scaleElement(state, target, ratio, originFor(view.getComputedStyle(from))));
 }
 
 function restoreFit(record) {

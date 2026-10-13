@@ -267,3 +267,41 @@ test('restoreAll removes the fit scaling and restores the exact markup', () => {
   restoreAll(state, document);
   assert.equal(document.body.innerHTML, html);
 });
+
+test('a single line that overflows slightly is scaled down instead of wrapped', () => {
+  const { document } = makeDocument('<h2 style="white-space: nowrap">Contact</h2>');
+  const h2 = document.querySelector('h2');
+  stubOverflow(h2, 150, 100);
+  const state = createDomState();
+  assert.equal(applyRun(state, collectUnits(document.body)[0], 'お問い合わせ'), 'applied');
+  assert.equal(h2.style.whiteSpace, 'nowrap', 'still one line');
+  assert.equal(h2.style.transform, 'scale(0.667)');
+  assert.equal(h2.style.transformOrigin, 'top left');
+});
+
+test('the line scale origin follows the text alignment', () => {
+  const { document } = makeDocument('<h2 style="white-space: nowrap; text-align: center">Contact</h2>');
+  const h2 = document.querySelector('h2');
+  stubOverflow(h2, 150, 100);
+  applyRun(createDomState(), collectUnits(document.body)[0], 'お問い合わせ');
+  assert.equal(h2.style.transformOrigin, 'top center');
+});
+
+test('a line with its own transform wraps instead of being scaled', () => {
+  const { document } = makeDocument('<h2 style="white-space: nowrap; transform: rotate(1deg)">Contact</h2>');
+  const h2 = document.querySelector('h2');
+  stubOverflow(h2, 150, 100);
+  applyRun(createDomState(), collectUnits(document.body)[0], 'お問い合わせ');
+  assert.equal(h2.style.transform, 'rotate(1deg)');
+  assert.equal(h2.style.getPropertyValue('white-space'), 'normal');
+});
+
+test('restoreAll undoes a line scale exactly', () => {
+  const html = '<h2 style="white-space: nowrap">Contact</h2>';
+  const { document } = makeDocument(html);
+  stubOverflow(document.querySelector('h2'), 150, 100);
+  const state = createDomState();
+  applyRun(state, collectUnits(document.body)[0], 'お問い合わせ');
+  restoreAll(state, document);
+  assert.equal(document.body.innerHTML, html);
+});
