@@ -145,3 +145,11 @@ test('restoreAll keeps going when one record cannot be restored', () => {
   assert.doesNotThrow(() => restoreAll(state, document));
   assert.equal(document.getElementById('b').textContent, 'Two');
 });
+
+test('applyRun works for units collected with ignoreTranslateNo', () => {
+  const { document } = makeDocument('<div translate="no"><p>Hello <b>world</b></p></div>');
+  const state = createDomState();
+  const [unit] = collectUnits(document.body, { ignoreTranslateNo: true });
+  assert.equal(applyRun(state, unit, 'こんにちは <g0>世界</g0>'), 'applied');
+  assert.equal(document.querySelector('p').innerHTML, 'こんにちは <b>世界</b>');
+});

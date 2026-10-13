@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   maxUnitsPerBatch: 40,
   maxCharsPerBatch: 3000,
   concurrency: 3,
+  ignoreTranslateNo: false,
   providers: {
     openai: { apiKey: '', model: 'gpt-5.5' },
     anthropic: { apiKey: '', model: 'claude-opus-5-5' },

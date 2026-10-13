@@ -25,39 +25,40 @@ const LETTER = /\p{L}/u;
 
 export const collapse = (s) => s.replace(/\s+/g, ' ').trim();
 
-export function isExcluded(el) {
+/** @param {{ ignoreTranslateNo?: boolean }} [options] ignoreTranslateNo: サイトの翻訳禁止指定を無視する */
+export function isExcluded(el, { ignoreTranslateNo = false } = {}) {
   if (SKIP.has(el.localName)) return true;
   if (el.id === STATUS_HOST_ID) return true;
-  if (el.getAttribute('translate') === 'no') return true;
-  if (el.classList?.contains('notranslate')) return true;
+  if (!ignoreTranslateNo && el.getAttribute('translate') === 'no') return true;
+  if (!ignoreTranslateNo && el.classList?.contains('notranslate')) return true;
   const editable = el.getAttribute('contenteditable');
   return editable !== null && editable !== 'false';
 }
 
 /** 段落内で中身ごと1つの <xN/> として扱うノード */
-function isOpaque(node) {
+function isOpaque(node, options) {
   if (node.nodeType !== ELEMENT) return node.nodeType !== TEXT;
-  return VOID_INLINE.has(node.localName) || isExcluded(node);
+  return VOID_INLINE.has(node.localName) || isExcluded(node, options);
 }
 
-function isPureInline(el) {
-  if (!INLINE.has(el.localName) || isExcluded(el)) return false;
+function isPureInline(el, options) {
+  if (!INLINE.has(el.localName) || isExcluded(el, options)) return false;
   for (const child of el.children) {
     if (BOUNDARY.has(child.localName)) return false;
-    if (isOpaque(child)) continue;
-    if (!isPureInline(child)) return false;
+    if (isOpaque(child, options)) continue;
+    if (!isPureInline(child, options)) return false;
   }
   return true;
 }
 
-function collectTextNodes(nodes, { skipCode }) {
+function collectTextNodes(nodes, { skipCode }, options) {
   const out = [];
   const visit = (n) => {
     if (n.nodeType === TEXT) {
       out.push(n);
       return;
     }
-    if (n.nodeType !== ELEMENT || isOpaque(n)) return;
+    if (n.nodeType !== ELEMENT || isOpaque(n, options)) return;
     if (skipCode && CODE_LIKE.has(n.localName)) return;
     n.childNodes.forEach(visit);
   };
@@ -68,12 +69,12 @@ function collectTextNodes(nodes, { skipCode }) {
 const escapeText = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const unescapeText = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
-export function serializeRun(nodes) {
+export function serializeRun(nodes, options) {
   const tokens = [];
   const serialize = (n) => {
     if (n.nodeType === TEXT) return escapeText(n.data);
     const id = tokens.length;
-    if (isOpaque(n)) {
+    if (isOpaque(n, options)) {
       tokens.push({ type: 'x', node: n });
       return `<x${id}/>`;
     }
@@ -85,14 +86,15 @@ export function serializeRun(nodes) {
   return { text: collapse(nodes.map(serialize).join('')), tokens };
 }
 
-export function collectUnits(root, { isSettled = () => false } = {}) {
+export function collectUnits(root, { isSettled = () => false, ignoreTranslateNo = false } = {}) {
+  const options = { ignoreTranslateNo };
   const units = [];
 
   const flush = (parent, run) => {
     if (!run.length) return;
-    const textNodes = collectTextNodes(run, { skipCode: true }).filter((n) => LETTER.test(n.data));
+    const textNodes = collectTextNodes(run, { skipCode: true }, options).filter((n) => LETTER.test(n.data));
     if (!textNodes.length || isSettled(textNodes)) return;
-    units.push({ kind: 'run', parent, nodes: run, text: serializeRun(run).text, textNodes });
+    units.push({ kind: 'run', parent, nodes: run, text: serializeRun(run, options).text, textNodes, options });
   };
 
   const walk = (el) => {
@@ -105,18 +107,18 @@ export function collectUnits(root, { isSettled = () => false } = {}) {
       } else if (BOUNDARY.has(child.localName)) {
         flush(el, run);
         run = [];
-      } else if (isOpaque(child) || isPureInline(child)) {
+      } else if (isOpaque(child, options) || isPureInline(child, options)) {
         run.push(child);
       } else {
         flush(el, run);
         run = [];
-        if (!isExcluded(child)) walk(child);
+        if (!isExcluded(child, options)) walk(child);
       }
     }
     flush(el, run);
   };
 
-  if (!isExcluded(root)) walk(root);
+  if (!isExcluded(root, options)) walk(root);
   return units;
 }
 

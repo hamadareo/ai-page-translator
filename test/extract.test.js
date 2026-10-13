@@ -125,3 +125,19 @@ test('collectTitleUnit', () => {
 test('collapse', () => {
   assert.equal(collapse('  a \n\t b  '), 'a b');
 });
+
+const optTexts = (html, options) => collectUnits(makeDocument(html).document.body, options).map((u) => u.text);
+const NO_TRANSLATE_HTML = '<div translate="no"><p>Hero title</p></div><p class="notranslate">Brand line</p><p>Hi <span translate="no">Bob</span>!</p>';
+
+test('translate="no" and .notranslate are honored by default', () => {
+  assert.deepEqual(optTexts(NO_TRANSLATE_HTML, {}), ['Hi <x0/>!']);
+});
+
+test('ignoreTranslateNo translates content marked translate="no" or .notranslate', () => {
+  assert.deepEqual(optTexts(NO_TRANSLATE_HTML, { ignoreTranslateNo: true }), ['Hero title', 'Brand line', 'Hi <g0>Bob</g0>!']);
+});
+
+test('ignoreTranslateNo still skips code, inputs, scripts and editable areas', () => {
+  const html = '<pre>Code block</pre><textarea>Typed</textarea><script>var a = "x";</script><div contenteditable="true">Editing</div><p>Visible</p>';
+  assert.deepEqual(optTexts(html, { ignoreTranslateNo: true }), ['Visible']);
+});

@@ -37,7 +37,12 @@ const handlers = {
   async getConfig() {
     const s = await loadSettings(storage);
     assertValid(s);
-    return { maxUnitsPerBatch: s.maxUnitsPerBatch, maxCharsPerBatch: s.maxCharsPerBatch, concurrency: s.concurrency };
+    return {
+      maxUnitsPerBatch: s.maxUnitsPerBatch,
+      maxCharsPerBatch: s.maxCharsPerBatch,
+      concurrency: s.concurrency,
+      ignoreTranslateNo: s.ignoreTranslateNo,
+    };
   },
   async testConnection({ settings }) {
     assertValid(settings);

@@ -143,7 +143,7 @@ export function createPageTranslator({
 
   async function runScan(id) {
     try {
-      const units = collectUnits(document.body, { isSettled: isSettledNodes });
+      const units = collectUnits(document.body, { isSettled: isSettledNodes, ignoreTranslateNo: Boolean(config.ignoreTranslateNo) });
       const title = collectTitleUnit(document, isSettledTitle);
       if (title) units.unshift(title);
       if (units.length) {

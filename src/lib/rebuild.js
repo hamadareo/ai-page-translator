@@ -15,7 +15,7 @@ function isRunIntact(unit) {
 
 export function applyRun(state, unit, translated) {
   if (!isRunIntact(unit)) return 'stale';
-  const { text, tokens } = serializeRun(unit.nodes);
+  const { text, tokens } = serializeRun(unit.nodes, unit.options);
   if (text !== unit.text) return 'stale';
 
   let tree;

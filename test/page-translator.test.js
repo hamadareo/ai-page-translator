@@ -14,10 +14,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function setup(html, options = {}) {
   const { window, document } = makeDocument(html, { title: 'Hello page' });
-  const ctl = { failWith: null, translate: (t) => `[ja]${t}` };
+  const ctl = { failWith: null, translate: (t) => `[ja]${t}`, config: {} };
   const batches = [];
   const sendMessage = async (msg) => {
-    if (msg.type === 'getConfig') return { ok: true, maxUnitsPerBatch: 40, maxCharsPerBatch: 3000, concurrency: 2 };
+    if (msg.type === 'getConfig') return { ok: true, maxUnitsPerBatch: 40, maxCharsPerBatch: 3000, concurrency: 2, ...ctl.config };
     if (msg.type === 'translateBatch') {
       batches.push(msg.texts);
       if (ctl.failWith) return { ok: false, error: ctl.failWith };
@@ -212,4 +212,18 @@ test('a paragraph that changed structure mid-translation is translated later', a
   await waitFor(() => p.textContent.startsWith('[ja]Hello'));
   assert.ok(p.querySelector('img'));
   pt.stop();
+});
+
+test('honors translate="no" unless the ignoreTranslateNo setting is on', async () => {
+  const html = '<div translate="no"><p>Hero</p></div><p>Body</p>';
+  const off = setup(html);
+  await off.pt.translate();
+  assert.equal(off.document.querySelector('[translate="no"] p').textContent, 'Hero');
+  off.pt.stop();
+  const on = setup(html);
+  on.ctl.config = { ignoreTranslateNo: true };
+  await on.pt.translate();
+  assert.equal(on.document.querySelector('[translate="no"] p').textContent, '[ja]Hero');
+  assert.equal(on.document.querySelectorAll('p')[1].textContent, '[ja]Body');
+  on.pt.stop();
 });

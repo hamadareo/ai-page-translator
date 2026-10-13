@@ -50,3 +50,7 @@ test('load and save round-trip through storage', async () => {
   assert.deepEqual(storage.data[SETTINGS_KEY], s);
   assert.deepEqual(await loadSettings(storage), s);
 });
+
+test('ignoreTranslateNo defaults to off', () => {
+  assert.equal(mergeSettings(undefined).ignoreTranslateNo, false);
+});
