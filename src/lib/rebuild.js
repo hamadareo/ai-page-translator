@@ -172,6 +172,43 @@ function restoreFit(record) {
   target.style.removeProperty('transform-origin');
 }
 
+/** 見た目の行に分けるためだけの要素（Canva などが1行ずつ span で包み、br で改行する） */
+const LINE_WRAPPERS = new Set(['span', 'font']);
+const LINE_BREAKS = new Set(['br', 'wbr']);
+const ANY_TAG = /<\/?[gcx]\d+\s*\/?>/g;
+
+function isLineOnly(tokens) {
+  return tokens.every(({ type, node }) =>
+    type === 'x' ? LINE_BREAKS.has(node.localName) : type === 'g' && LINE_WRAPPERS.has(node.localName));
+}
+
+/**
+ * モデルが記号の対応を崩したとき、記号を除いた訳文を原文の最初の文字の位置にまとめ、
+ * 残りの文字は空に、改行は取り除いた木を作る（行の要素は残すので、元に戻せる）
+ */
+function plainTree(source, translated) {
+  // 記号を外した跡は、英数字どうしの間だけ空白にする（日本語の文中には空白を入れない）
+  const stripped = translated
+    .replace(ANY_TAG, '\u0000')
+    .replace(/(?<=[A-Za-z0-9])\u0000+(?=[A-Za-z0-9])/g, ' ')
+    .replace(/\u0000/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const text = stripped && parseMarked(stripped)[0]?.value;
+  if (!text) return null;
+  let placed = false;
+  const rewrite = (nodes) =>
+    nodes
+      .filter((n) => n.type !== 'x')
+      .map((n) => {
+        if (n.type !== 'text') return { ...n, children: rewrite(n.children) };
+        if (placed || !n.value.trim()) return { ...n, value: '' };
+        placed = true;
+        return { ...n, value: text };
+      });
+  return rewrite(parseMarked(source));
+}
+
 function isRunIntact(unit) {
   return unit.nodes.every((n, i) => n.parentNode === unit.parent && (i === 0 || unit.nodes[i - 1].nextSibling === n));
 }
@@ -181,13 +218,16 @@ export function applyRun(state, unit, translated) {
   const { text, tokens } = serializeRun(unit.nodes, unit.options);
   if (text !== unit.text) return 'stale';
 
-  let tree;
+  let tree = null;
   try {
     tree = parseMarked(translated.trim());
   } catch {
-    return 'mismatch';
+    // 記号の対応が崩れた応答。下で地の文として扱えるか確かめる
   }
-  if (!tree.length || !matchesTokens(tree, tokens)) return 'mismatch';
+  if (!tree?.length || !matchesTokens(tree, tokens)) {
+    tree = isLineOnly(tokens) ? plainTree(unit.text, translated) : null;
+    if (!tree) return 'mismatch';
+  }
 
   const doc = unit.parent.ownerDocument;
   const box = findFixedBox(unit.parent);

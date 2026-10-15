@@ -382,3 +382,24 @@ test('applyTitle and applyText drop placeholder tags the model invented for plai
   assert.equal(node.data, 'こんにちは');
   assert.equal(applyText(state, { kind: 'text', node: document.createTextNode('x'), text: 'x' }, '<g0></g0>'), 'failed');
 });
+
+const CANVA = '<p class="t"><span class="a">Human activity recognition has been studied</span><span class="a"><br></span><span class="a">in thousands of papers.</span></p>';
+
+test('applyRun puts the whole translation in the first line when a model breaks the tags of a line-only paragraph', () => {
+  const { document, state, units } = setup(CANVA);
+  const p = document.querySelector('p');
+  const first = p.querySelector('span').firstChild;
+  assert.equal(applyRun(state, units[0], '<g0>人間の活動認識は</g3><x2/><g3>数千の論文で &amp; 研究されてきた。</g0>'), 'applied');
+  assert.equal(p.textContent, '人間の活動認識は数千の論文で & 研究されてきた。');
+  assert.equal(p.querySelector('span').firstChild, first, 'the first text node is reused');
+  assert.equal(p.querySelectorAll('br').length, 0);
+  assert.equal(p.querySelectorAll('span').length, 3);
+  restoreAll(state, document);
+  assert.equal(document.body.innerHTML, CANVA);
+});
+
+test('applyRun still reports a mismatch when the paragraph has a link or other meaningful markup', () => {
+  const { state, units } = setup('<p><span>See </span><a href="/x">this link</a><br><span>now.</span></p><p><span>Use </span><b>bold</b> text.</p>');
+  assert.equal(applyRun(state, units[0], '<g0>見て</g3><g1>このリンク</g1><x2/>今'), 'mismatch');
+  assert.equal(applyRun(state, units[1], '<g0>使う</g0><g1>太字</g9>'), 'mismatch');
+});
