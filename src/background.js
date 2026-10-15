@@ -4,6 +4,7 @@ import { createLimiter } from './lib/limiter.js';
 import { createTranslateService } from './lib/translate-service.js';
 import { callProvider } from './lib/providers/index.js';
 import { toErrorPayload, TranslationError } from './lib/errors.js';
+import { ensureLmStudio, listLmStudioModels } from './lib/lmstudio.js';
 
 const storage = chrome.storage.local;
 const cache = createCache(storage);
@@ -30,13 +31,25 @@ async function keepAlive(work) {
   }
 }
 
+const sendNativeMessage = (host, message) => chrome.runtime.sendNativeMessage(host, message);
+
+/** LM Studio を使う設定なら、必要に応じて起動とモデル読み込みを済ませる */
+function prepareProvider(settings, tabId) {
+  if (settings.provider !== 'lmstudio') return Promise.resolve();
+  const onProgress = (text) => {
+    if (tabId != null) chrome.tabs.sendMessage(tabId, { type: 'phase', text }).catch(() => {});
+  };
+  return keepAlive(() => ensureLmStudio(settings.providers.lmstudio, { sendNativeMessage, onProgress }));
+}
+
 const handlers = {
   async translateBatch({ texts }) {
     return { translations: await keepAlive(() => translateTexts(texts)) };
   },
-  async getConfig() {
+  async getConfig(_message, sender) {
     const s = await loadSettings(storage);
     assertValid(s);
+    await prepareProvider(s, sender?.tab?.id);
     return {
       maxUnitsPerBatch: s.maxUnitsPerBatch,
       maxCharsPerBatch: s.maxCharsPerBatch,
@@ -46,8 +59,12 @@ const handlers = {
   },
   async testConnection({ settings }) {
     assertValid(settings);
+    await prepareProvider(settings, null);
     const [sample] = await callProvider(settings.provider, ['Hello, world!'], settings.targetLang, settings.providers[settings.provider]);
     return { sample };
+  },
+  async listLmStudioModels() {
+    return { models: await listLmStudioModels({ sendNativeMessage }) };
   },
   async clearCache() {
     await cache.clear();
@@ -55,10 +72,10 @@ const handlers = {
   },
 };
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = handlers[message?.type];
   if (!handler) return false;
-  handler(message).then(
+  handler(message, sender).then(
     (data) => sendResponse({ ok: true, ...data }),
     (err) => sendResponse({ ok: false, error: toErrorPayload(err) }),
   );
