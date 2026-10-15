@@ -75,15 +75,10 @@ test('a failing injection does not throw', async () => {
   await follower.onUpdated(7, complete, page('https://example.com/'));
 });
 
-test('a tab opened from a followed tab is followed too', async () => {
+test('a tab opened from a followed tab (target="_blank" and the like) is not translated', async () => {
   const { follower, injected } = setup();
   await follower.start(7);
-  await follower.onCreated({ id: 11, openerTabId: 7 });
-  await follower.onCreated({ id: 12, openerTabId: 99 });
-  await follower.onCreated({ id: 13 });
-  for (const id of [11, 12, 13]) await follower.onUpdated(id, complete, page('https://elsewhere.example/'));
-  assert.deepEqual(injected, [11]);
-  await follower.stop(7);
-  await follower.onUpdated(11, complete, page('https://elsewhere.example/next'));
-  assert.deepEqual(injected, [11, 11], 'the new tab keeps following on its own');
+  assert.equal(follower.onCreated, undefined, 'new tabs are not tracked');
+  await follower.onUpdated(11, complete, page('https://elsewhere.example/'));
+  assert.deepEqual(injected, []);
 });
