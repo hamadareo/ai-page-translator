@@ -3,6 +3,7 @@ import { statusText } from '../lib/status-overlay.js';
 
 const $ = (id) => document.getElementById(id);
 let tabId;
+let lastStatus = null;
 
 async function sendToTab(message) {
   try {
@@ -13,12 +14,18 @@ async function sendToTab(message) {
 }
 
 function render(status) {
+  lastStatus = status;
   $('status').textContent = (status && statusText(status)) || '待機中';
   $('status').classList.toggle('error', status?.state === 'error');
   const active = status?.state === 'translating' || status?.state === 'done';
   $('translate').disabled = status?.state === 'translating' || (status?.state === 'done' && !status.failed);
   $('stop').disabled = !active;
 }
+
+// 翻訳中は応答待ちの秒数が進むので1秒ごとに描き直す
+setInterval(() => {
+  if (lastStatus?.state === 'translating') render(lastStatus);
+}, 1000);
 
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

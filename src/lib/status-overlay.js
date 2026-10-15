@@ -1,9 +1,15 @@
 import { STATUS_HOST_ID } from './extract.js';
 
-export function statusText(status) {
+const WAIT_NOTICE_MS = 10000;
+
+export function statusText(status, now = Date.now()) {
   switch (status.state) {
-    case 'translating':
-      return status.phase || `翻訳中… ${status.done}/${status.total}`;
+    case 'translating': {
+      if (status.phase) return status.phase;
+      const text = `翻訳中… ${status.done}/${status.total}`;
+      const waited = status.progressAt == null ? 0 : now - status.progressAt;
+      return waited >= WAIT_NOTICE_MS ? `${text}（応答待ち ${Math.floor(waited / 1000)}秒）` : text;
+    }
     case 'done':
       if (!status.failed) return '翻訳完了';
       return status.error ? `翻訳完了（${status.failed}件失敗: ${status.error.message}）` : `翻訳完了（${status.failed}件失敗）`;
@@ -30,8 +36,15 @@ const CSS = `
   .close { all: unset; cursor: pointer; padding: 0 4px; font-size: 16px; line-height: 1; }
 `;
 
-export function createStatusOverlay(doc, { dimAfterMs = 4000 } = {}) {
+export function createStatusOverlay(doc, {
+  dimAfterMs = 4000,
+  now = Date.now,
+  setInterval = globalThis.setInterval,
+  clearInterval = globalThis.clearInterval,
+} = {}) {
   let host = null;
+  let ticker = null;
+  let last = null;
   let box = null;
   let message = null;
   let timer = null;
@@ -48,18 +61,31 @@ export function createStatusOverlay(doc, { dimAfterMs = 4000 } = {}) {
     doc.documentElement.appendChild(host);
   }
 
+  function stopTicker() {
+    if (ticker != null) clearInterval(ticker);
+    ticker = null;
+  }
+
+  function render() {
+    message.textContent = statusText(last, now());
+  }
+
   function hide() {
+    stopTicker();
     clearTimeout(timer);
     host?.remove();
     host = null;
   }
 
   function update(status) {
-    const text = statusText(status);
-    if (!text) return hide();
+    if (!statusText(status, now())) return hide();
     ensure();
     clearTimeout(timer);
-    message.textContent = text;
+    last = status;
+    render();
+    // 翻訳中は1秒ごとに描き直して応答待ちの秒数を進める
+    if (status.state === 'translating') ticker ??= setInterval(() => host?.isConnected && render(), 1000);
+    else stopTicker();
     box.classList.toggle('error', status.state === 'error');
     box.classList.remove('dim');
     if (status.state === 'done' || status.state === 'stopped') {
@@ -72,6 +98,9 @@ export function createStatusOverlay(doc, { dimAfterMs = 4000 } = {}) {
     hide,
     get element() {
       return host;
+    },
+    get text() {
+      return message?.textContent ?? '';
     },
   };
 }

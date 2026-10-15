@@ -37,3 +37,29 @@ test('statusText shows the phase while translating', () => {
   assert.equal(statusText({ ...base, state: 'translating', phase: 'LM Studio を起動しています…' }), 'LM Studio を起動しています…');
   assert.equal(statusText({ ...base, state: 'translating', phase: null, done: 1, total: 2 }), '翻訳中… 1/2');
 });
+
+test('statusText says how long it has been waiting once progress stalls for 10 seconds', () => {
+  const s = { ...base, state: 'translating', phase: null, done: 58, total: 98, progressAt: 1000 };
+  assert.equal(statusText(s, 1000 + 9000), '翻訳中… 58/98');
+  assert.equal(statusText(s, 1000 + 25400), '翻訳中… 58/98（応答待ち 25秒）');
+  assert.equal(statusText({ ...s, progressAt: null }, 99999), '翻訳中… 58/98');
+  assert.equal(statusText({ ...s, state: 'done' }, 99999), '翻訳完了');
+});
+
+test('the overlay refreshes the waiting time while translating and stops when done', () => {
+  const { document } = makeDocument('<p>x</p>');
+  let clock = 0;
+  const ticks = [];
+  const overlay = createStatusOverlay(document, {
+    now: () => clock,
+    setInterval: (fn) => { ticks.push(fn); return ticks.length; },
+    clearInterval: (id) => { ticks[id - 1] = null; },
+  });
+  overlay.update({ ...base, state: 'translating', done: 1, total: 4, progressAt: 0 });
+  clock = 12000;
+  ticks[0]();
+  assert.equal(overlay.text, '翻訳中… 1/4（応答待ち 12秒）');
+  overlay.update({ ...base, state: 'done' });
+  assert.equal(ticks[0], null);
+  overlay.hide();
+});

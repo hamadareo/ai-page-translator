@@ -14,9 +14,10 @@ export function createPageTranslator({
   maxWaitMs = 2000,
   MutationObserverImpl = globalThis.MutationObserver,
   isInViewport = () => true,
+  now = Date.now,
 }) {
   const dom = createDomState();
-  let status = { state: 'idle', done: 0, total: 0, failed: 0, error: null, phase: null };
+  let status = { state: 'idle', done: 0, total: 0, failed: 0, error: null, phase: null, progressAt: null };
   let session = 0;
   let config = null;
   let observer = null;
@@ -29,7 +30,11 @@ export function createPageTranslator({
   let claimedTitle = null;
 
   const emit = (patch) => {
-    status = { ...status, ...patch };
+    const next = { ...status, ...patch };
+    // 最後に進んだ時刻。翻訳開始・件数の変化・段階表示の変化で更新し、応答待ちの秒数表示に使う
+    const moved = status.state !== 'translating' || next.done !== status.done || next.phase !== status.phase;
+    next.progressAt = next.state === 'translating' ? (moved ? now() : status.progressAt) : null;
+    status = next;
     onStatus(status);
   };
 

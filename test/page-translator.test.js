@@ -40,7 +40,7 @@ test('translates body and title, keeping elements', async () => {
   assert.equal(document.querySelectorAll('p')[1].textContent, '[ja]Second');
   assert.equal(document.title, '[ja]Hello page');
   assert.equal(document.querySelector('a'), link);
-  assert.deepEqual(status, { state: 'done', done: 3, total: 3, failed: 0, error: null, phase: null });
+  assert.deepEqual(status, { state: 'done', done: 3, total: 3, failed: 0, error: null, phase: null, progressAt: null });
   assert.equal(statuses[0].state, 'translating');
   pt.stop();
 });
@@ -282,4 +282,14 @@ test('setPhase is ignored when not translating', () => {
   const pt = createPageTranslator({ document, sendMessage: async () => ({ ok: true }) });
   pt.setPhase('x');
   assert.equal(pt.getStatus().phase, null);
+});
+
+test('progressAt is set when translating starts and moves when a batch finishes', async () => {
+  let clock = 100;
+  const { pt, statuses } = setup('<p>One</p>', { now: () => clock++ });
+  await pt.translate();
+  const translating = statuses.filter((s) => s.state === 'translating');
+  assert.ok(translating.every((s) => typeof s.progressAt === 'number'));
+  const withDone = statuses.find((s) => s.done > 0);
+  assert.ok(withDone.progressAt > translating[0].progressAt);
 });
