@@ -12,7 +12,13 @@
     "service_worker": "src/background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "nativeMessaging"
+  ],
   "host_permissions": [
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
@@ -20,11 +26,18 @@
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
-  "optional_host_permissions": ["<all_urls>"],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
   "web_accessible_resources": [
     {
-      "resources": ["src/lib/*.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "src/lib/*.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzbGalErQTGlFztIh2dE8GaEekftB1h8AzOAaMVOiAjVsWKJ2LU9g2uPUf0OImsFZ9OwjNZJeYECj5oGHK04dU2lBcxXdr9+It0GZHN/FYTAL3B9R9BBk2VsEUNq+rvk6z/k1i6EJDadBmtf+6CS6fKNCejf3VSsBJrPTR9xMept8KAfn8f0Lgit7iezGOztGP7fez/vFyzycegTDx0M4koVSeUp4Rn+LYEE43KZAsS/p04TYs0eQfLZHLSmmtOjFDLDXog++V5oxUXUu6yOGOo0hj7itAcHcAEa4rUAUGnDz04ak5MKH4RZkwZd2ojZoTKm5KXG7YDMXW+pMTlwCnwIDAQAB"
 }
