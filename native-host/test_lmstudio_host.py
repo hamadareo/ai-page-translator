@@ -143,6 +143,19 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(ctx.exception.kind, 'lms_failed')
 
 
+class PortTest(unittest.TestCase):
+    def test_ensure_reports_a_server_running_on_another_port(self):
+        runner = FakeRunner({
+            'ls --json': (0, LS, ''),
+            'server status --json': (0, '{"running":true,"port":1235}', ''),
+        })
+        with self.assertRaises(host.HostError) as ctx:
+            ensure(runner)
+        self.assertEqual(ctx.exception.kind, 'port_mismatch')
+        self.assertEqual(ctx.exception.to_dict()['running_port'], 1235)
+        self.assertFalse(any(c.startswith('server start') or c.startswith('load') for c in runner.commands()))
+
+
 class FindLmsTest(unittest.TestCase):
     def test_find_lms_finds_the_lm_studio_cli_with_an_empty_path(self):
         with tempfile.TemporaryDirectory() as home:

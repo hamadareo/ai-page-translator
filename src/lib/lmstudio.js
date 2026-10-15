@@ -1,4 +1,4 @@
-import { TranslationError } from './errors.js';
+import { TranslationError, isLocalUrl } from './errors.js';
 import { defaultSleep } from './retry.js';
 
 export const NATIVE_HOST = 'com.aipagetranslator.lmstudio';
@@ -11,6 +11,7 @@ const MESSAGES = {
   lmsNotFound: 'LM Studio が見つかりません。LM Studio をインストールし、一度起動してください',
   modelNotFound: (model) => `モデル ${model} が LM Studio にありません。設定画面でモデルを選び直してください`,
   timeout: 'LM Studio の起動（またはモデルの読み込み）に時間がかかっています。LM Studio の画面を確認してください',
+  portMismatch: (running, wanted) => `LM Studio のサーバーはポート ${running} で動いています。設定のアドレスのポート（${wanted}）を ${running} に合わせてください`,
   failed: (what, detail) => `LM Studio で${what}できませんでした${detail ? `（${detail}）` : ''}`,
 };
 
@@ -32,7 +33,7 @@ async function isServerUp(baseUrl, fetch) {
   }
 }
 
-function helperError(error, model) {
+function helperError(error, model, port) {
   switch (error?.kind) {
     case 'lms_not_found':
       return new TranslationError('config', MESSAGES.lmsNotFound);
@@ -40,6 +41,8 @@ function helperError(error, model) {
       return new TranslationError('config', MESSAGES.modelNotFound(model));
     case 'timeout':
       return new TranslationError('network', MESSAGES.timeout);
+    case 'port_mismatch':
+      return new TranslationError('config', MESSAGES.portMismatch(error.running_port, port));
     case 'load_failed':
       return new TranslationError('config', MESSAGES.failed('モデルを読み込め', error.message));
     case 'start_failed':
@@ -61,7 +64,8 @@ export async function ensureLmStudio(
   config,
   { fetch = globalThis.fetch, sendNativeMessage, sleep = defaultSleep, now = Date.now, onProgress = () => {}, startWaitMs = START_WAIT_MS } = {},
 ) {
-  if (!config.autoStart) return { started: false, loaded: false };
+  // 自動起動できるのはこのパソコンの LM Studio だけ（別のパソコンを指していれば手元では何もしない）
+  if (!config.autoStart || !isLocalUrl(config.baseUrl)) return { started: false, loaded: false };
   const up = await isServerUp(config.baseUrl, fetch);
   onProgress(up ? 'モデルを読み込んでいます…' : 'LM Studio を起動しています…');
 
@@ -71,7 +75,7 @@ export async function ensureLmStudio(
     if (up) return { started: false, loaded: false };
     throw new TranslationError('config', MESSAGES.helperMissing);
   }
-  if (!reply?.ok) throw helperError(reply?.error, config.model);
+  if (!reply?.ok) throw helperError(reply?.error, config.model, portOf(config.baseUrl));
 
   if (!up) {
     const deadline = now() + startWaitMs;
@@ -88,4 +92,16 @@ export async function listLmStudioModels({ sendNativeMessage }) {
   if (missing) throw new TranslationError('config', MESSAGES.helperMissing);
   if (!reply?.ok) throw helperError(reply?.error, '');
   return reply.models;
+}
+
+/** 同じキーの処理が実行中なら、新しく始めずにその結果を共有する（二重起動・二重読み込みを防ぐ） */
+export function shareInFlight(fn, keyOf) {
+  const running = new Map();
+  return (...args) => {
+    const key = keyOf(...args);
+    if (running.has(key)) return running.get(key);
+    const promise = (async () => fn(...args))().finally(() => running.delete(key));
+    running.set(key, promise);
+    return promise;
+  };
 }

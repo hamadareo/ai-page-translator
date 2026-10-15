@@ -4,7 +4,7 @@ import { createLimiter } from './lib/limiter.js';
 import { createTranslateService } from './lib/translate-service.js';
 import { callProvider } from './lib/providers/index.js';
 import { toErrorPayload, TranslationError } from './lib/errors.js';
-import { ensureLmStudio, listLmStudioModels } from './lib/lmstudio.js';
+import { ensureLmStudio, listLmStudioModels, shareInFlight } from './lib/lmstudio.js';
 
 const storage = chrome.storage.local;
 const cache = createCache(storage);
@@ -32,6 +32,8 @@ async function keepAlive(work) {
 }
 
 const sendNativeMessage = (host, message) => chrome.runtime.sendNativeMessage(host, message);
+// 複数のタブや接続テストから同時に呼ばれても、起動と読み込みは1回だけにする
+const ensureLmStudioOnce = shareInFlight(ensureLmStudio, (config) => `${config.model}|${config.baseUrl}`);
 
 /** LM Studio を使う設定なら、必要に応じて起動とモデル読み込みを済ませる */
 function prepareProvider(settings, tabId) {
@@ -39,7 +41,7 @@ function prepareProvider(settings, tabId) {
   const onProgress = (text) => {
     if (tabId != null) chrome.tabs.sendMessage(tabId, { type: 'phase', text }).catch(() => {});
   };
-  return keepAlive(() => ensureLmStudio(settings.providers.lmstudio, { sendNativeMessage, onProgress }));
+  return keepAlive(() => ensureLmStudioOnce(settings.providers.lmstudio, { sendNativeMessage, onProgress }));
 }
 
 const handlers = {

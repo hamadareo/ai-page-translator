@@ -103,7 +103,11 @@ def handle(message, lms, runner=subprocess.run):
         raise HostError('model_not_found', model)
 
     started = False
-    if not run_json(lms, ['server', 'status', '--json'], runner).get('running'):
+    status = run_json(lms, ['server', 'status', '--json'], runner)
+    if status.get('running') and status.get('port') not in (None, port):
+        # 別のポートで動いているサーバーは止めない。設定の食い違いとして知らせる
+        raise HostError('port_mismatch', '', running_port=status.get('port'), wanted_port=port)
+    if not status.get('running'):
         result = run(lms, ['server', 'start', '--port', str(port)], runner, step='start')
         if result.returncode != 0:
             raise HostError('start_failed', (result.stderr or result.stdout or '')[:300])

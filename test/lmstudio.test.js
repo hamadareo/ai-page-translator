@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureLmStudio, listLmStudioModels, NATIVE_HOST, portOf } from '../src/lib/lmstudio.js';
+import { ensureLmStudio, listLmStudioModels, NATIVE_HOST, portOf, shareInFlight } from '../src/lib/lmstudio.js';
 
 const config = { model: 'qwen/qwen2.5-coder-14b', baseUrl: 'http://localhost:1234/v1', autoStart: true };
 
@@ -102,4 +102,35 @@ test('listLmStudioModels returns the helper list and maps errors', async () => {
   assert.deepEqual(await listLmStudioModels({ sendNativeMessage: fakeHost({ ok: true, models }) }), models);
   await assert.rejects(listLmStudioModels({ sendNativeMessage: fakeHost(HELPER_MISSING) }), (e) => e.kind === 'config' && /補助プログラム/.test(e.message));
   await assert.rejects(listLmStudioModels({ sendNativeMessage: fakeHost({ ok: false, error: { kind: 'lms_not_found' } }) }), /LM Studio が見つかりません/);
+});
+
+test('concurrent preparations share one helper call', async () => {
+  let calls = 0;
+  let release;
+  const slow = async () => { calls++; await new Promise((r) => { release = r; }); return { started: true, loaded: true }; };
+  const shared = shareInFlight(slow, (cfg) => `${cfg.model}|${cfg.baseUrl}`);
+  const a = shared(config);
+  const b = shared(config);
+  release();
+  assert.deepEqual(await a, { started: true, loaded: true });
+  assert.deepEqual(await b, { started: true, loaded: true });
+  assert.equal(calls, 1);
+  const c = shared(config);
+  release();
+  await c;
+  assert.equal(calls, 2, 'a new call after the first finished runs again');
+});
+
+test('a remote address is never auto-started on this machine', async () => {
+  const send = fakeHost({ ok: true, started: true, loaded: true });
+  const result = await ensureLmStudio({ ...config, baseUrl: 'http://192.168.1.20:1234/v1' }, { fetch: async () => { throw new TypeError('down'); }, sendNativeMessage: send, ...fakeClock() });
+  assert.deepEqual(result, { started: false, loaded: false });
+  assert.equal(send.calls.length, 0);
+});
+
+test('a server running on another port is reported right away', async () => {
+  await assert.rejects(
+    ensureLmStudio(config, { fetch: fakeServer(Infinity), sendNativeMessage: fakeHost({ ok: false, error: { kind: 'port_mismatch', running_port: 1235 } }), ...fakeClock() }),
+    (e) => e.kind === 'config' && /1235/.test(e.message) && /1234/.test(e.message),
+  );
 });
