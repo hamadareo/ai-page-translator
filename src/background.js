@@ -56,6 +56,7 @@ const follower = createFollower({
   },
 });
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => void follower.onUpdated(tabId, changeInfo, tab));
+chrome.tabs.onCreated.addListener((tab) => void follower.onCreated(tab));
 chrome.tabs.onRemoved.addListener((tabId) => void follower.onRemoved(tabId));
 
 const handlers = {

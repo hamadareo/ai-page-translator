@@ -36,5 +36,11 @@ export function createFollower({ storage, inject, isEnabled }) {
     }
   }
 
-  return { start, stop, onUpdated, onRemoved: stop };
+  /** 翻訳中のタブのリンクから開かれた新しいタブ（target="_blank" など）も翻訳を続ける */
+  async function onCreated(tab) {
+    if (tab?.openerTabId == null || !(await load()).has(tab.openerTabId)) return;
+    await start(tab.id);
+  }
+
+  return { start, stop, onUpdated, onCreated, onRemoved: stop };
 }
