@@ -43,10 +43,29 @@ function show(text, isError = false) {
   message.classList.toggle('error', isError);
 }
 
+async function loadLmStudioModels() {
+  const hint = document.getElementById('lmstudio-hint');
+  const list = document.getElementById('lmstudio-models');
+  const input = form.querySelector('[name="providers.lmstudio.model"]');
+  hint.textContent = 'モデル一覧を取得しています…';
+  const res = await chrome.runtime
+    .sendMessage({ type: 'listLmStudioModels' })
+    .catch((err) => ({ ok: false, error: { message: String(err?.message ?? err) } }));
+  if (!res?.ok) {
+    hint.textContent = `モデル一覧を取得できませんでした: ${res?.error?.message ?? '不明なエラー'}。モデル名を直接入力することもできます。`;
+    return;
+  }
+  list.replaceChildren(...res.models.map((m) => new Option(m.name, m.key)));
+  hint.textContent = res.models.length
+    ? `${res.models.length}個のモデルが見つかりました。入力欄から選べます。`
+    : 'ダウンロード済みのモデルがありません。LM Studio でモデルをダウンロードしてください。';
+  if (!input.value && res.models[0]) input.value = res.models[0].key;
+}
+
 /** ユーザー操作の直後に同期的に呼ぶ（chrome.permissions.request はユーザー操作が必要） */
 function requestHostPermission(settings) {
-  if (settings.provider !== 'compat') return Promise.resolve(true);
-  const origin = new URL(settings.providers.compat.baseUrl).origin;
+  if (settings.provider !== 'compat' && settings.provider !== 'lmstudio') return Promise.resolve(true);
+  const origin = new URL(settings.providers[settings.provider].baseUrl).origin;
   if (isLocalUrl(origin)) return Promise.resolve(true);
   return chrome.permissions.request({ origins: [`${origin}/*`] });
 }
@@ -66,7 +85,11 @@ async function prepare() {
   return settings;
 }
 
-providerSelect.addEventListener('change', showProviderSection);
+providerSelect.addEventListener('change', () => {
+  showProviderSection();
+  if (providerSelect.value === 'lmstudio') loadLmStudioModels();
+});
+document.getElementById('lmstudio-refresh').addEventListener('click', loadLmStudioModels);
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -92,3 +115,4 @@ document.getElementById('clear-cache').addEventListener('click', async () => {
 });
 
 fill(await loadSettings(chrome.storage.local));
+if (providerSelect.value === 'lmstudio') loadLmStudioModels();

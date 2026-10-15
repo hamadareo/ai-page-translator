@@ -40,6 +40,24 @@
         <p class="hint">Ollama で 403 になる場合は、環境変数 <code>OLLAMA_ORIGINS=chrome-extension://*</code> を設定して Ollama を再起動してください。</p>
       </fieldset>
 
+      <fieldset data-provider="lmstudio">
+        <legend>LM Studio（ローカル）</legend>
+        <label>モデル <input name="providers.lmstudio.model" list="lmstudio-models" placeholder="例: qwen/qwen2.5-coder-14b" autocomplete="off"></label>
+        <datalist id="lmstudio-models"></datalist>
+        <p class="hint" id="lmstudio-hint"></p>
+        <button type="button" id="lmstudio-refresh">モデル一覧を更新</button>
+        <label class="check"><input name="providers.lmstudio.autoStart" type="checkbox"> LM Studio を自動で起動する</label>
+        <label>アドレス <input name="providers.lmstudio.baseUrl" placeholder="http://localhost:1234/v1"></label>
+        <details>
+          <summary>自動起動の準備（初回のみ）</summary>
+          <ol class="hint">
+            <li>ターミナルで <code>sh &lt;この拡張機能のフォルダ&gt;/native-host/install.sh</code> を実行する</li>
+            <li><code>chrome://extensions</code> でこの拡張機能を再読み込みする</li>
+          </ol>
+          <p class="hint">Python 3.8 以上と LM Studio が必要です。削除するときは <code>native-host/uninstall.sh</code> を実行します。</p>
+        </details>
+      </fieldset>
+
       <fieldset>
         <legend>翻訳</legend>
         <label>翻訳先言語 <input name="targetLang" required></label>
