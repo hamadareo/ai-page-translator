@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-timeout=10000 test/*.test.js"
+    "test": "node --test --test-timeout=10000 test/*.test.js",
+    "test:host": "python3 -m unittest discover -s native-host -p 'test_*.py'"
   },
   "devDependencies": {
     "jsdom": "^30.1.2"
