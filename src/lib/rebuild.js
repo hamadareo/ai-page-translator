@@ -242,9 +242,13 @@ export function applyRun(state, unit, translated) {
   return 'applied';
 }
 
+// 地の文（タグなしの原文）なのにモデルが付けてきた <gN>・<cN>・<xN/> を取り除く
+const STRAY_TAG = /<\/?[gc]\d+>|<x\d+\/>/g;
+const plainOf = (translated) => translated.replace(STRAY_TAG, '').trim();
+
 export function applyText(state, unit, translated) {
   const { node } = unit;
-  const value = translated.trim();
+  const value = plainOf(translated);
   if (!value) return 'failed';
   if (!node.parentNode || collapse(node.data) !== unit.text) return 'stale';
   const original = node.data;
@@ -257,7 +261,7 @@ export function applyText(state, unit, translated) {
 }
 
 export function applyTitle(state, doc, unit, translated) {
-  const value = translated.trim();
+  const value = plainOf(translated);
   if (!value) return 'failed';
   if (collapse(doc.title) !== unit.text) return 'stale';
   const original = doc.title;

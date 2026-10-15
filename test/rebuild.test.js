@@ -372,3 +372,13 @@ test('every overflowing line in the same box keeps its own width scale', () => {
   assert.equal(p1.getAttribute('style'), 'white-space: nowrap');
   assert.equal(p2.getAttribute('style'), 'white-space: nowrap');
 });
+
+test('applyTitle and applyText drop placeholder tags the model invented for plain text', () => {
+  const { document, state } = setup('<p>Hello</p>', 'ABC2027');
+  assert.equal(applyTitle(state, document, collectTitleUnit(document, () => false), '<g0><c0>ABC2027</c0></g0>'), 'applied');
+  assert.equal(document.title, 'ABC2027');
+  const node = document.querySelector('p').firstChild;
+  assert.equal(applyText(state, { kind: 'text', node, text: 'Hello' }, '<g1>こんにちは</g1><x0/>'), 'applied');
+  assert.equal(node.data, 'こんにちは');
+  assert.equal(applyText(state, { kind: 'text', node: document.createTextNode('x'), text: 'x' }, '<g0></g0>'), 'failed');
+});
