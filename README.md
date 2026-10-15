@@ -43,3 +43,6 @@ npm install
 npm test
 ```
 設計: `docs/superpowers/specs/2026-10-13-ai-page-translator-design.md` / 手動確認: `docs/manual-test.md`
+
+## ライセンス
+[MIT](LICENSE)
