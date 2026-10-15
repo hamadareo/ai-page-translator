@@ -3,7 +3,7 @@ import { PROMPT_VERSION } from './prompt.js';
 import { callProvider } from './providers/index.js';
 import { withRetry } from './retry.js';
 import { TranslationError } from './errors.js';
-import { validateSettings } from './settings.js';
+import { validateSettings, effectiveLimits } from './settings.js';
 
 /** 応答が使えない（bad_response）ときはバッチを半分に分けて再依頼する。最後まで失敗した要素は null。 */
 export async function translateWithSplit(texts, translateOnce) {
@@ -25,7 +25,7 @@ export function createTranslateService({ getSettings, cache, limiter, call = cal
     const settings = await getSettings();
     const invalid = validateSettings(settings);
     if (invalid) throw new TranslationError('config', invalid);
-    limiter.setMax(settings.concurrency);
+    limiter.setMax(effectiveLimits(settings).concurrency);
 
     const { provider, targetLang } = settings;
     const config = settings.providers[provider];

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_SETTINGS, PROVIDER_IDS, PROVIDER_LABELS, mergeSettings, validateSettings, loadSettings, saveSettings, SETTINGS_KEY,
+  DEFAULT_SETTINGS, PROVIDER_IDS, PROVIDER_LABELS, mergeSettings, validateSettings, loadSettings, saveSettings, SETTINGS_KEY, effectiveLimits,
 } from '../src/lib/settings.js';
 import { createFakeStorage } from './helpers/fake-storage.js';
 
@@ -62,4 +62,13 @@ test('lmstudio defaults and validation', () => {
   assert.match(validateSettings(s), /モデル/);
   assert.equal(validateSettings(mergeSettings({ provider: 'lmstudio', providers: { lmstudio: { model: 'qwen/qwen2.5-coder-14b' } } })), null, 'no API key needed');
   assert.match(validateSettings(mergeSettings({ provider: 'lmstudio', providers: { lmstudio: { model: 'm', baseUrl: 'ftp://x' } } })), /ベースURL/);
+});
+
+test('effectiveLimits sends small sequential batches to LM Studio and leaves cloud providers alone', () => {
+  const cloud = mergeSettings({ provider: 'gemini' });
+  assert.deepEqual(effectiveLimits(cloud), { maxUnitsPerBatch: 40, maxCharsPerBatch: 3000, concurrency: 3 });
+  const local = mergeSettings({ provider: 'lmstudio' });
+  assert.deepEqual(effectiveLimits(local), { maxUnitsPerBatch: 10, maxCharsPerBatch: 1000, concurrency: 1 });
+  const smaller = mergeSettings({ provider: 'lmstudio', maxUnitsPerBatch: 5, maxCharsPerBatch: 500 });
+  assert.deepEqual(effectiveLimits(smaller), { maxUnitsPerBatch: 5, maxCharsPerBatch: 500, concurrency: 1 }, 'user values below the caps are kept');
 });

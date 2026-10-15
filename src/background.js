@@ -1,4 +1,4 @@
-import { loadSettings, validateSettings } from './lib/settings.js';
+import { loadSettings, validateSettings, effectiveLimits } from './lib/settings.js';
 import { createCache } from './lib/cache.js';
 import { createLimiter } from './lib/limiter.js';
 import { createTranslateService } from './lib/translate-service.js';
@@ -52,12 +52,7 @@ const handlers = {
     const s = await loadSettings(storage);
     assertValid(s);
     await prepareProvider(s, sender?.tab?.id);
-    return {
-      maxUnitsPerBatch: s.maxUnitsPerBatch,
-      maxCharsPerBatch: s.maxCharsPerBatch,
-      concurrency: s.concurrency,
-      ignoreTranslateNo: s.ignoreTranslateNo,
-    };
+    return { ...effectiveLimits(s), ignoreTranslateNo: s.ignoreTranslateNo };
   },
   async testConnection({ settings }) {
     assertValid(settings);

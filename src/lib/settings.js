@@ -59,6 +59,20 @@ export function validateSettings(s) {
   return null;
 }
 
+/** 手元の LLM は1件ずつ順番に処理するので、小さなまとまりを1件ずつ送る */
+const LOCAL_LIMITS = { maxUnitsPerBatch: 10, maxCharsPerBatch: 1000, concurrency: 1 };
+
+/** 実際に使う送り方（まとまりの大きさと同時数） */
+export function effectiveLimits(s) {
+  const limits = { maxUnitsPerBatch: s.maxUnitsPerBatch, maxCharsPerBatch: s.maxCharsPerBatch, concurrency: s.concurrency };
+  if (s.provider !== 'lmstudio') return limits;
+  return {
+    maxUnitsPerBatch: Math.min(limits.maxUnitsPerBatch, LOCAL_LIMITS.maxUnitsPerBatch),
+    maxCharsPerBatch: Math.min(limits.maxCharsPerBatch, LOCAL_LIMITS.maxCharsPerBatch),
+    concurrency: LOCAL_LIMITS.concurrency,
+  };
+}
+
 export async function loadSettings(storage) {
   const result = await storage.get(SETTINGS_KEY);
   return mergeSettings(result[SETTINGS_KEY]);
