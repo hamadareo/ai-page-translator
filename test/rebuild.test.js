@@ -403,3 +403,52 @@ test('applyRun still reports a mismatch when the paragraph has a link or other m
   assert.equal(applyRun(state, units[0], '<g0>見て</g3><g1>このリンク</g1><x2/>今'), 'mismatch');
   assert.equal(applyRun(state, units[1], '<g0>使う</g0><g1>太字</g9>'), 'mismatch');
 });
+
+const LINKED_LINES = '<p><a href="/c">UWB-FallTrack Challenge: </a><a href="/c">Continuous Fall</a><a href="/c"><br></a><a href="/c">Detection in UWB Radar Streams</a></p>';
+
+test('a paragraph split into lines that all link to the same place is kept whole when tags break', () => {
+  const { document, state, units } = setup(LINKED_LINES);
+  assert.equal(applyRun(state, units[0], '<g0>UWB-FallTrackチャレンジ：</g1>UWBレーダー<x3/>ストリームにおける継続的な転倒検出</g4>'), 'applied');
+  const links = document.querySelectorAll('a');
+  assert.equal(links[0].textContent, 'UWB-FallTrackチャレンジ：UWBレーダーストリームにおける継続的な転倒検出');
+  assert.equal(document.querySelector('p').textContent, links[0].textContent);
+  restoreAll(state, document);
+  assert.equal(document.body.innerHTML, LINKED_LINES);
+});
+
+test('lines linking to different places, or text outside the link, still fall back per text node', () => {
+  const { state, units } = setup('<p><a href="/a">First line</a><br><a href="/b">second line</a></p><p><a href="/a">Linked</a><span> and plain</span></p>');
+  assert.equal(applyRun(state, units[0], '<g0>一行目</g9>二行目'), 'mismatch');
+  assert.equal(applyRun(state, units[1], '<g0>リンク</g5>と地の文'), 'mismatch');
+});
+
+test('a translation that moves all text out of the elements that held it is treated as broken', () => {
+  const html = '<ul><li><a href=""><span>Home</span></a></li></ul>';
+  const { document, state, units } = setup(html);
+  const text = document.querySelector('span').firstChild;
+  assert.equal(applyRun(state, units[0], 'ホーム<g0><g1></g1></g0>'), 'applied');
+  assert.equal(document.querySelector('li').firstChild, document.querySelector('a'));
+  assert.equal(document.querySelector('span').firstChild, text);
+  assert.equal(text.data, 'ホーム');
+  restoreAll(state, document);
+  assert.equal(document.body.innerHTML, html);
+});
+
+test('when a model puts the translation outside and echoes the source inside, only the translation is used', () => {
+  const html = '<ul><li><a href=""><span>Home</span></a></li><li><a href=""><span>CFP</span></a></li></ul>';
+  const { document, state, units } = setup(html);
+  assert.equal(applyRun(state, units[0], 'ホーム<g0><g1>Home</g1></g0>'), 'applied');
+  assert.equal(applyRun(state, units[1], 'CFP<g0><g1>CFP</g1></g0>'), 'applied');
+  assert.deepEqual([...document.querySelectorAll('span')].map((s) => s.textContent), ['ホーム', 'CFP']);
+});
+
+test('applyText drops a copy of the source that the model appended or prepended', () => {
+  const { document, state } = setup('<p>UWB-FallTrack Challenge: </p><p>Continuous Fall</p><p>Python</p>');
+  const [a, b, c] = [...document.querySelectorAll('p')].map((p) => p.firstChild);
+  assert.equal(applyText(state, { kind: 'text', node: a, text: 'UWB-FallTrack Challenge:' }, 'UWB-FallTrackチャレンジ：UWB-FallTrack Challenge:'), 'applied');
+  assert.equal(a.data, 'UWB-FallTrackチャレンジ： ');
+  assert.equal(applyText(state, { kind: 'text', node: b, text: 'Continuous Fall' }, 'Continuous Fall 継続的な転倒'), 'applied');
+  assert.equal(b.data, '継続的な転倒');
+  assert.equal(applyText(state, { kind: 'text', node: c, text: 'Python' }, 'Pythonの'), 'applied');
+  assert.equal(c.data, 'Pythonの');
+});

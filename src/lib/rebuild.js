@@ -177,25 +177,50 @@ const LINE_WRAPPERS = new Set(['span', 'font']);
 const LINE_BREAKS = new Set(['br', 'wbr']);
 const ANY_TAG = /<\/?[gcx]\d+\s*\/?>/g;
 
-function isLineOnly(tokens) {
-  return tokens.every(({ type, node }) =>
-    type === 'x' ? LINE_BREAKS.has(node.localName) : type === 'g' && LINE_WRAPPERS.has(node.localName));
+/**
+ * 行を包む要素と改行だけでできた段落か。行ごとに分かれたリンクは、
+ * すべて同じリンク先で、文字がどれもそのリンクの中にあるときだけ1つのリンクとみなす
+ */
+function isLineOnly(unit, tokens) {
+  const links = tokens.filter(({ type, node }) => type === 'g' && node.localName === 'a').map(({ node }) => node);
+  const ok = tokens.every(({ type, node }) =>
+    type === 'x' ? LINE_BREAKS.has(node.localName) : type === 'g' && (node.localName === 'a' || LINE_WRAPPERS.has(node.localName)));
+  if (!ok || new Set(links.map((a) => a.getAttribute('href'))).size > 1) return false;
+  return !links.length || unit.textNodes.every((n) => links.some((a) => a.contains(n)));
 }
 
 /**
  * モデルが記号の対応を崩したとき、記号を除いた訳文を原文の最初の文字の位置にまとめ、
  * 残りの文字は空に、改行は取り除いた木を作る（行の要素は残すので、元に戻せる）
  */
-function plainTree(source, translated) {
-  // 記号を外した跡は、英数字どうしの間だけ空白にする（日本語の文中には空白を入れない）
+// 記号を外した跡は、英数字どうしの間だけ空白にする（日本語の文中には空白を入れない）
+function plainText(translated) {
   const stripped = translated
     .replace(ANY_TAG, '\u0000')
     .replace(/(?<=[A-Za-z0-9])\u0000+(?=[A-Za-z0-9])/g, ' ')
     .replace(/\u0000/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  const text = stripped && parseMarked(stripped)[0]?.value;
-  if (!text) return null;
+  return (stripped && parseMarked(stripped)[0]?.value) || null;
+}
+
+const leavesOf = (nodes, out = []) => {
+  for (const n of nodes) {
+    if (n.type === 'text') out.push(collapse(n.value));
+    else if (n.children) leavesOf(n.children, out);
+  }
+  return out.filter(Boolean);
+};
+
+/** 訳文を要素の外に置き、要素の中には原文をそのまま残した応答なら、外にある訳文だけを返す */
+function echoedOutside(source, tree) {
+  if (!tree || !hoistsText(source, tree)) return null;
+  const sourceTexts = new Set(leavesOf(parseMarked(source)));
+  if (!leavesOf(tree.filter((n) => n.type !== 'text')).every((t) => sourceTexts.has(t))) return null;
+  return collapse(tree.filter((n) => n.type === 'text').map((n) => n.value).join('')) || null;
+}
+
+function plainTree(source, text) {
   let placed = false;
   const rewrite = (nodes) =>
     nodes
@@ -207,6 +232,12 @@ function plainTree(source, translated) {
         return { ...n, value: text };
       });
   return rewrite(parseMarked(source));
+}
+
+/** 原文では文字がすべて要素の中にあったのに、訳では要素の外に出ている（モデルが記号を崩した） */
+function hoistsText(source, tree) {
+  const outside = (nodes) => nodes.some((n) => n.type === 'text' && n.value.trim());
+  return !outside(parseMarked(source)) && outside(tree);
 }
 
 function isRunIntact(unit) {
@@ -224,8 +255,10 @@ export function applyRun(state, unit, translated) {
   } catch {
     // 記号の対応が崩れた応答。下で地の文として扱えるか確かめる
   }
-  if (!tree?.length || !matchesTokens(tree, tokens)) {
-    tree = isLineOnly(tokens) ? plainTree(unit.text, translated) : null;
+  if (!tree?.length || !matchesTokens(tree, tokens) || hoistsText(unit.text, tree)) {
+    if (!isLineOnly(unit, tokens)) return 'mismatch';
+    const text = echoedOutside(unit.text, tree) ?? plainText(translated);
+    tree = text && plainTree(unit.text, text);
     if (!tree) return 'mismatch';
   }
 
@@ -286,9 +319,18 @@ export function applyRun(state, unit, translated) {
 const STRAY_TAG = /<\/?[gc]\d+>|<x\d+\/>/g;
 const plainOf = (translated) => translated.replace(STRAY_TAG, '').trim();
 
+/** 2語以上の原文が訳文の前後にそのまま付いていたら取り除く（ローカルのモデルにある癖） */
+function dropEcho(value, source) {
+  const s = source.trim();
+  if (!/\s/.test(s) || value.length <= s.length) return value;
+  if (value.endsWith(s)) return value.slice(0, -s.length).trim();
+  if (value.startsWith(s)) return value.slice(s.length).trim();
+  return value;
+}
+
 export function applyText(state, unit, translated) {
   const { node } = unit;
-  const value = plainOf(translated);
+  const value = dropEcho(plainOf(translated), unit.text);
   if (!value) return 'failed';
   if (!node.parentNode || collapse(node.data) !== unit.text) return 'stale';
   const original = node.data;
