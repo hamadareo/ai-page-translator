@@ -1,10 +1,14 @@
-export const PROVIDER_IDS = ['openai', 'anthropic', 'gemini', 'compat'];
+export const PROVIDER_IDS = ['openai', 'anthropic', 'gemini', 'compat', 'lmstudio'];
+
+/** APIキーが不要で、ベースURLを持つプロバイダ */
+const LOCAL_PROVIDERS = new Set(['compat', 'lmstudio']);
 
 export const PROVIDER_LABELS = {
   openai: 'OpenAI',
   anthropic: 'Anthropic (Claude)',
   gemini: 'Google Gemini',
   compat: 'OpenAI互換 / ローカルLLM',
+  lmstudio: 'LM Studio（ローカル）',
 };
 
 export const SETTINGS_KEY = 'settings';
@@ -21,6 +25,7 @@ export const DEFAULT_SETTINGS = {
     anthropic: { apiKey: '', model: 'claude-opus-5-5' },
     gemini: { apiKey: '', model: 'gemini-3.8-flash' },
     compat: { apiKey: '', model: 'llama3.2', baseUrl: 'http://localhost:11434/v1', jsonMode: false },
+    lmstudio: { model: '', baseUrl: 'http://localhost:1234/v1', autoStart: true },
   },
 };
 
@@ -38,8 +43,8 @@ export function validateSettings(s) {
   if (!PROVIDER_IDS.includes(s.provider)) return 'プロバイダが不正です';
   const p = s.providers[s.provider];
   if (!p.model?.trim()) return 'モデル名を設定してください';
-  if (s.provider !== 'compat' && !p.apiKey?.trim()) return 'APIキーを設定してください';
-  if (s.provider === 'compat') {
+  if (!LOCAL_PROVIDERS.has(s.provider) && !p.apiKey?.trim()) return 'APIキーを設定してください';
+  if (LOCAL_PROVIDERS.has(s.provider)) {
     let url;
     try {
       url = new URL(p.baseUrl);

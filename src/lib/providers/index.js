@@ -2,6 +2,7 @@ import { openaiProvider } from './openai.js';
 import { compatProvider } from './openai-compatible.js';
 import { anthropicProvider } from './anthropic.js';
 import { geminiProvider } from './gemini.js';
+import { lmstudioProvider } from './lmstudio.js';
 import { parseTranslations } from '../prompt.js';
 import { TranslationError, classifyHttpError, networkError } from '../errors.js';
 
@@ -10,6 +11,7 @@ export const PROVIDERS = {
   anthropic: anthropicProvider,
   gemini: geminiProvider,
   compat: compatProvider,
+  lmstudio: lmstudioProvider,
 };
 
 /** @returns {Promise<string[]>} */

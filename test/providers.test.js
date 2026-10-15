@@ -142,3 +142,13 @@ test('callProvider gives up on a request that never answers', async () => {
     (e) => e.kind === 'timeout' && /時間/.test(e.message),
   );
 });
+
+test('lmstudio request uses its base URL, no key and no JSON mode', () => {
+  const { url, init } = PROVIDERS.lmstudio.buildRequest(['Hi'], '日本語', { model: 'qwen/qwen2.5-coder-14b', baseUrl: 'http://localhost:1234/v1', autoStart: true });
+  assert.equal(url, 'http://localhost:1234/v1/chat/completions');
+  assert.equal('Authorization' in init.headers, false);
+  const body = JSON.parse(init.body);
+  assert.equal(body.model, 'qwen/qwen2.5-coder-14b');
+  assert.equal('response_format' in body, false);
+  assert.equal(PROVIDERS.lmstudio.extractText({ choices: [{ message: { content: 'x' } }] }), 'x');
+});

@@ -16,7 +16,7 @@ test('defaults match the spec', () => {
   assert.equal(s.providers.anthropic.model, 'claude-opus-5-5');
   assert.equal(s.providers.gemini.model, 'gemini-3.8-flash');
   assert.deepEqual(s.providers.compat, { apiKey: '', model: 'llama3.2', baseUrl: 'http://localhost:11434/v1', jsonMode: false });
-  assert.deepEqual(PROVIDER_IDS, ['openai', 'anthropic', 'gemini', 'compat']);
+  assert.deepEqual(PROVIDER_IDS, ['openai', 'anthropic', 'gemini', 'compat', 'lmstudio']);
   for (const id of PROVIDER_IDS) assert.equal(typeof PROVIDER_LABELS[id], 'string');
 });
 
@@ -53,4 +53,13 @@ test('load and save round-trip through storage', async () => {
 
 test('ignoreTranslateNo defaults to off', () => {
   assert.equal(mergeSettings(undefined).ignoreTranslateNo, false);
+});
+
+test('lmstudio defaults and validation', () => {
+  const s = mergeSettings({ provider: 'lmstudio' });
+  assert.deepEqual(s.providers.lmstudio, { model: '', baseUrl: 'http://localhost:1234/v1', autoStart: true });
+  assert.equal(PROVIDER_LABELS.lmstudio, 'LM Studio（ローカル）');
+  assert.match(validateSettings(s), /モデル/);
+  assert.equal(validateSettings(mergeSettings({ provider: 'lmstudio', providers: { lmstudio: { model: 'qwen/qwen2.5-coder-14b' } } })), null, 'no API key needed');
+  assert.match(validateSettings(mergeSettings({ provider: 'lmstudio', providers: { lmstudio: { model: 'm', baseUrl: 'ftp://x' } } })), /ベースURL/);
 });
