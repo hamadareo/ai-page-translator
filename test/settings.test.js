@@ -72,3 +72,8 @@ test('effectiveLimits sends small sequential batches to LM Studio and leaves clo
   const smaller = mergeSettings({ provider: 'lmstudio', maxUnitsPerBatch: 5, maxCharsPerBatch: 500 });
   assert.deepEqual(effectiveLimits(smaller), { maxUnitsPerBatch: 5, maxCharsPerBatch: 500, concurrency: 1 }, 'user values below the caps are kept');
 });
+
+test('following clicked links is off by default and kept when saved', () => {
+  assert.equal(mergeSettings({}).followLinks, false);
+  assert.equal(mergeSettings({ followLinks: true }).followLinks, true);
+});

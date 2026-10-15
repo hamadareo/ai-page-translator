@@ -66,6 +66,8 @@
         <label>同時リクエスト数 <input name="concurrency" type="number" min="1" max="10" required></label>
         <label class="check"><input name="ignoreTranslateNo" type="checkbox"> サイトの翻訳禁止指定を無視して翻訳する</label>
         <p class="hint">サイトが <code>translate="no"</code> や <code>class="notranslate"</code> で「翻訳しないでほしい」と指定した箇所も翻訳します。レイアウトが崩れる場合があります。</p>
+        <label class="check"><input name="followLinks" type="checkbox"> クリックした先のページも自動で翻訳する</label>
+        <p class="hint">「翻訳」を押したタブで別のページへ移ると、移った先も自動で翻訳します（ほかのサイトへ移っても続きます）。「停止」か「原文に戻す」を押すか、タブを閉じると止まります。保存するときに「すべてのサイトのデータの読み取りと変更」の許可を求めます。移った先のページの文章も、選んでいる AI に送られます。</p>
       </fieldset>
 
       <div class="buttons">

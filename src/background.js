@@ -5,6 +5,7 @@ import { createTranslateService } from './lib/translate-service.js';
 import { callProvider } from './lib/providers/index.js';
 import { toErrorPayload, TranslationError } from './lib/errors.js';
 import { ensureLmStudio, listLmStudioModels, shareInFlight } from './lib/lmstudio.js';
+import { createFollower } from './lib/follow.js';
 
 const storage = chrome.storage.local;
 const cache = createCache(storage);
@@ -44,7 +45,24 @@ function prepareProvider(settings, tabId) {
   return keepAlive(() => ensureLmStudioOnce(settings.providers.lmstudio, { sendNativeMessage, onProgress }));
 }
 
+// 「クリックした先のページも自動で翻訳する」: 翻訳中のタブでページが移ったら、移った先でも翻訳を始める
+const ALL_SITES = { origins: ['<all_urls>'] };
+const follower = createFollower({
+  storage: chrome.storage.session,
+  isEnabled: async () => (await loadSettings(storage)).followLinks && chrome.permissions.contains(ALL_SITES),
+  inject: async (tabId) => {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] });
+    await chrome.tabs.sendMessage(tabId, { type: 'translate' });
+  },
+});
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => void follower.onUpdated(tabId, changeInfo, tab));
+chrome.tabs.onRemoved.addListener((tabId) => void follower.onRemoved(tabId));
+
 const handlers = {
+  async follow({ tabId, on }) {
+    await (on ? follower.start(tabId) : follower.stop(tabId));
+    return {};
+  },
   async translateBatch({ texts }) {
     return { translations: await keepAlive(() => translateTexts(texts)) };
   },

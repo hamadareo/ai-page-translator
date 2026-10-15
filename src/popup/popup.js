@@ -46,12 +46,14 @@ $('translate').addEventListener('click', async () => {
   }
   const res = await sendToTab({ type: 'translate' });
   render(res?.status);
+  chrome.runtime.sendMessage({ type: 'follow', tabId, on: true }).catch(() => {});
 });
 
 for (const type of ['stop', 'restore']) {
   $(type).addEventListener('click', async () => {
     const res = await sendToTab({ type });
     render(res?.status);
+    chrome.runtime.sendMessage({ type: 'follow', tabId, on: false }).catch(() => {});
   });
 }
 

@@ -62,12 +62,19 @@ async function loadLmStudioModels() {
   if (!input.value && res.models[0]) input.value = res.models[0].key;
 }
 
-/** ユーザー操作の直後に同期的に呼ぶ（chrome.permissions.request はユーザー操作が必要） */
+/**
+ * ユーザー操作の直後に同期的に呼ぶ（chrome.permissions.request はユーザー操作が必要）。
+ * 1回の操作で求められる許可は1回なので、必要なアクセス先をまとめて求める
+ */
 function requestHostPermission(settings) {
-  if (settings.provider !== 'compat' && settings.provider !== 'lmstudio') return Promise.resolve(true);
-  const origin = new URL(settings.providers[settings.provider].baseUrl).origin;
-  if (isLocalUrl(origin)) return Promise.resolve(true);
-  return chrome.permissions.request({ origins: [`${origin}/*`] });
+  const origins = [];
+  if (settings.followLinks) origins.push('<all_urls>');
+  if (settings.provider === 'compat' || settings.provider === 'lmstudio') {
+    const origin = new URL(settings.providers[settings.provider].baseUrl).origin;
+    if (!isLocalUrl(origin)) origins.push(`${origin}/*`);
+  }
+  if (!origins.length) return Promise.resolve(true);
+  return chrome.permissions.request({ origins });
 }
 
 async function prepare() {
@@ -79,7 +86,7 @@ async function prepare() {
     return null;
   }
   if (!(await requestHostPermission(settings))) {
-    show('ベースURLへのアクセスが許可されませんでした', true);
+    show(settings.followLinks ? 'サイトへのアクセスが許可されませんでした（「クリックした先のページも自動で翻訳する」には、すべてのサイトへのアクセスの許可が必要です）' : 'ベースURLへのアクセスが許可されませんでした', true);
     return null;
   }
   return settings;
