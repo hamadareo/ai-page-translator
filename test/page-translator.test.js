@@ -40,7 +40,7 @@ test('translates body and title, keeping elements', async () => {
   assert.equal(document.querySelectorAll('p')[1].textContent, '[ja]Second');
   assert.equal(document.title, '[ja]Hello page');
   assert.equal(document.querySelector('a'), link);
-  assert.deepEqual(status, { state: 'done', done: 3, total: 3, failed: 0, error: null });
+  assert.deepEqual(status, { state: 'done', done: 3, total: 3, failed: 0, error: null, phase: null });
   assert.equal(statuses[0].state, 'translating');
   pt.stop();
 });
@@ -246,4 +246,40 @@ test('a hung request from an earlier run does not block translating again', asyn
   assert.equal(status.state, 'done');
   assert.equal(document.querySelector('p').textContent, '[ja]One');
   pt.stop();
+});
+
+test('setPhase shows a phase while waiting for getConfig and clears it afterwards', async () => {
+  const { window, document } = makeDocument('<p>One</p>');
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const statuses = [];
+  const pt = createPageTranslator({
+    document,
+    MutationObserverImpl: window.MutationObserver,
+    debounceMs: 10,
+    onStatus: (s) => statuses.push(s),
+    sendMessage: async (msg) => {
+      if (msg.type === 'getConfig') {
+        await gate;
+        return { ok: true, maxUnitsPerBatch: 40, maxCharsPerBatch: 3000, concurrency: 1 };
+      }
+      return { ok: true, translations: msg.texts.map((t) => `[ja]${t}`) };
+    },
+  });
+  const done = pt.translate();
+  await sleep(5);
+  pt.setPhase('LM Studio を起動しています…');
+  assert.equal(pt.getStatus().phase, 'LM Studio を起動しています…');
+  release();
+  await done;
+  assert.equal(pt.getStatus().phase, null);
+  assert.ok(statuses.some((s) => s.phase === 'LM Studio を起動しています…'));
+  pt.stop();
+});
+
+test('setPhase is ignored when not translating', () => {
+  const { document } = makeDocument('<p>One</p>');
+  const pt = createPageTranslator({ document, sendMessage: async () => ({ ok: true }) });
+  pt.setPhase('x');
+  assert.equal(pt.getStatus().phase, null);
 });

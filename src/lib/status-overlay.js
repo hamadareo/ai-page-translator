@@ -3,7 +3,7 @@ import { STATUS_HOST_ID } from './extract.js';
 export function statusText(status) {
   switch (status.state) {
     case 'translating':
-      return `翻訳中… ${status.done}/${status.total}`;
+      return status.phase || `翻訳中… ${status.done}/${status.total}`;
     case 'done':
       if (!status.failed) return '翻訳完了';
       return status.error ? `翻訳完了（${status.failed}件失敗: ${status.error.message}）` : `翻訳完了（${status.failed}件失敗）`;

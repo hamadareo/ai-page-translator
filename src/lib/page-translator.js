@@ -16,7 +16,7 @@ export function createPageTranslator({
   isInViewport = () => true,
 }) {
   const dom = createDomState();
-  let status = { state: 'idle', done: 0, total: 0, failed: 0, error: null };
+  let status = { state: 'idle', done: 0, total: 0, failed: 0, error: null, phase: null };
   let session = 0;
   let config = null;
   let observer = null;
@@ -95,7 +95,7 @@ export function createPageTranslator({
   function fail(error) {
     session++;
     stopObserver();
-    emit({ state: 'error', error });
+    emit({ state: 'error', error, phase: null });
   }
 
   async function translateUnits(id, units) {
@@ -176,7 +176,7 @@ export function createPageTranslator({
     const id = ++session;
     claimed = new WeakMap();
     claimedTitle = null;
-    emit({ state: 'translating', done: 0, total: 0, failed: 0, error: null });
+    emit({ state: 'translating', done: 0, total: 0, failed: 0, error: null, phase: null });
     const res = await sendMessage({ type: 'getConfig' });
     if (id !== session) return status;
     if (!res?.ok) {
@@ -184,6 +184,7 @@ export function createPageTranslator({
       return status;
     }
     config = res;
+    emit({ phase: null });
     startObserver(id);
     await scan(id);
     return status;
@@ -199,8 +200,14 @@ export function createPageTranslator({
     session++;
     stopObserver();
     restoreAll(dom, document);
-    emit({ state: 'idle', done: 0, total: 0, failed: 0, error: null });
+    emit({ state: 'idle', done: 0, total: 0, failed: 0, error: null, phase: null });
   }
 
-  return { translate, stop, restore, getStatus: () => status };
+  /** 翻訳の準備中（LM Studio の起動待ちなど）の状況を表示する */
+  function setPhase(text) {
+    if (status.state !== 'translating') return;
+    emit({ phase: text ?? null });
+  }
+
+  return { translate, stop, restore, setPhase, getStatus: () => status };
 }

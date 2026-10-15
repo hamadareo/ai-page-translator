@@ -32,3 +32,8 @@ test('overlay appears while active and disappears when idle', () => {
   assert.equal(document.getElementById(STATUS_HOST_ID), null);
   overlay.hide();
 });
+
+test('statusText shows the phase while translating', () => {
+  assert.equal(statusText({ ...base, state: 'translating', phase: 'LM Studio を起動しています…' }), 'LM Studio を起動しています…');
+  assert.equal(statusText({ ...base, state: 'translating', phase: null, done: 1, total: 2 }), '翻訳中… 1/2');
+});

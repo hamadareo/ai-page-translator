@@ -44,13 +44,17 @@
       return t.getStatus();
     },
     status: (t) => t.getStatus(),
+    phase: (t, message) => {
+      t.setPhase(message.text);
+      return t.getStatus();
+    },
   };
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const action = actions[message?.type];
     if (!action) return false;
     ready.then(
-      (translator) => sendResponse({ ok: true, status: action(translator) }),
+      (translator) => sendResponse({ ok: true, status: action(translator, message) }),
       (err) => sendResponse({ ok: false, error: { kind: 'unknown', message: String(err?.message ?? err) } }),
     );
     return true;
