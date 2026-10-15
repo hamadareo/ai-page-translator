@@ -64,12 +64,12 @@ test('lmstudio defaults and validation', () => {
   assert.match(validateSettings(mergeSettings({ provider: 'lmstudio', providers: { lmstudio: { model: 'm', baseUrl: 'ftp://x' } } })), /ベースURL/);
 });
 
-test('effectiveLimits sends small sequential batches to LM Studio and leaves cloud providers alone', () => {
+test('effectiveLimits sends small batches to LM Studio two at a time and leaves cloud providers alone', () => {
   const cloud = mergeSettings({ provider: 'gemini' });
   assert.deepEqual(effectiveLimits(cloud), { maxUnitsPerBatch: 40, maxCharsPerBatch: 3000, concurrency: 3 });
   const local = mergeSettings({ provider: 'lmstudio' });
-  assert.deepEqual(effectiveLimits(local), { maxUnitsPerBatch: 10, maxCharsPerBatch: 1000, concurrency: 1 });
-  const smaller = mergeSettings({ provider: 'lmstudio', maxUnitsPerBatch: 5, maxCharsPerBatch: 500 });
+  assert.deepEqual(effectiveLimits(local), { maxUnitsPerBatch: 10, maxCharsPerBatch: 1000, concurrency: 2 });
+  const smaller = mergeSettings({ provider: 'lmstudio', maxUnitsPerBatch: 5, maxCharsPerBatch: 500, concurrency: 1 });
   assert.deepEqual(effectiveLimits(smaller), { maxUnitsPerBatch: 5, maxCharsPerBatch: 500, concurrency: 1 }, 'user values below the caps are kept');
 });
 

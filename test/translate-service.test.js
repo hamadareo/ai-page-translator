@@ -112,11 +112,11 @@ test('cache keys include the current prompt version', async () => {
   assert.deepEqual(seen, [await cacheKey('openai', settings.providers.openai.model, settings.targetLang, 'a', PROMPT_VERSION)]);
 });
 
-test('LM Studio requests run one at a time even across tabs', async () => {
+test('LM Studio requests run at most two at a time even across tabs', async () => {
   const maxes = [];
   const limiter = { setMax: (n) => maxes.push(n), run: (fn) => fn() };
   const lm = mergeSettings({ provider: 'lmstudio', providers: { lmstudio: { model: 'm' } } });
   const translate = createTranslateService({ getSettings: async () => lm, cache: createCache(createFakeStorage()), limiter, call: upper, sleep: async () => {} });
   await translate(['a']);
-  assert.deepEqual(maxes, [1]);
+  assert.deepEqual(maxes, [2]);
 });

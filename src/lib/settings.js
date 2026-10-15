@@ -60,8 +60,11 @@ export function validateSettings(s) {
   return null;
 }
 
-/** 手元の LLM は1件ずつ順番に処理するので、小さなまとまりを1件ずつ送る */
-const LOCAL_LIMITS = { maxUnitsPerBatch: 10, maxCharsPerBatch: 1000, concurrency: 1 };
+/**
+ * 手元の LLM には小さなまとまりを送る。LM Studio は同時に処理できるので2件ずつ送る
+ * （M3 Pro + gemma-3-12b の実測で1件ずつより約1.6倍速い。3件では伸びが小さい）
+ */
+const LOCAL_LIMITS = { maxUnitsPerBatch: 10, maxCharsPerBatch: 1000, concurrency: 2 };
 
 /** 実際に使う送り方（まとまりの大きさと同時数） */
 export function effectiveLimits(s) {
@@ -70,7 +73,7 @@ export function effectiveLimits(s) {
   return {
     maxUnitsPerBatch: Math.min(limits.maxUnitsPerBatch, LOCAL_LIMITS.maxUnitsPerBatch),
     maxCharsPerBatch: Math.min(limits.maxCharsPerBatch, LOCAL_LIMITS.maxCharsPerBatch),
-    concurrency: LOCAL_LIMITS.concurrency,
+    concurrency: Math.min(limits.concurrency, LOCAL_LIMITS.concurrency),
   };
 }
 
