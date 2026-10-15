@@ -10,24 +10,35 @@
   };
 
   const ready = (async () => {
-    const [{ createPageTranslator }, { createStatusOverlay }] = await Promise.all([
+    const [{ createPageTranslator }, { createStatusOverlay }, { createRuntimeLink }] = await Promise.all([
       import(chrome.runtime.getURL('src/lib/page-translator.js')),
       import(chrome.runtime.getURL('src/lib/status-overlay.js')),
+      import(chrome.runtime.getURL('src/lib/runtime-link.js')),
     ]);
     const overlay = createStatusOverlay(document);
-    return createPageTranslator({
+    let translator = null;
+    // 拡張機能が再読み込みされたら、このページに残った古い翻訳は静かに止める
+    const link = createRuntimeLink(chrome.runtime, {
+      onLost: () => {
+        overlay.hide();
+        translator?.stop();
+      },
+    });
+    translator = createPageTranslator({
       document,
       isInViewport,
       sendMessage: (message) =>
-        chrome.runtime.sendMessage(message).catch((err) => ({
+        link.send(message).catch((err) => ({
           ok: false,
           error: { kind: 'unknown', message: String(err?.message ?? err) },
         })),
       onStatus: (status) => {
-        overlay.update(status);
-        chrome.runtime.sendMessage({ type: 'progress', status }).catch(() => {});
+        // 送信で接続が切れたことに気づく（切れていれば onLost で止まり、表示も更新しない）
+        link.send({ type: 'progress', status }).catch(() => {});
+        if (link.alive()) overlay.update(status);
       },
     });
+    return translator;
   })();
 
   const actions = {
