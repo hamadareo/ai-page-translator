@@ -63,8 +63,21 @@ const handlers = {
     await (on ? follower.start(tabId) : follower.stop(tabId));
     return {};
   },
-  async translateBatch({ texts }) {
-    return { translations: await keepAlive(() => translateTexts(texts)) };
+  async translateBatch({ texts }, sender) {
+    const tabId = sender?.tab?.id;
+    const showPhase = (text) => {
+      if (tabId != null) chrome.tabs.sendMessage(tabId, { type: 'phase', text }).catch(() => {});
+    };
+    let waited = false;
+    const onWait = (ms) => {
+      waited = true;
+      showPhase(`利用上限のため ${Math.ceil(ms / 1000)} 秒待ってから続けます…`);
+    };
+    try {
+      return { translations: await keepAlive(() => translateTexts(texts, { onWait })) };
+    } finally {
+      if (waited) showPhase(null);
+    }
   },
   async getConfig(_message, sender) {
     const s = await loadSettings(storage);

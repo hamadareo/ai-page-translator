@@ -80,3 +80,56 @@ test('429 caused by an exhausted quota is a fatal quota error, not a retryable r
   assert.ok(RETRYABLE_KINDS.has('timeout'));
   assert.equal(classifyHttpError(429, '{"error":{"message":"Too many requests"}}', { url: CLOUD }).kind, 'rate_limit');
 });
+
+const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
+
+function geminiQuotaBody(quotaId, retryDelay) {
+  const details = [
+    {
+      '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [{ quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests', quotaId, quotaValue: '10' }],
+    },
+  ];
+  if (retryDelay) details.push({ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay });
+  return JSON.stringify({
+    error: {
+      code: 429,
+      message: `You exceeded your current quota, please check your plan and billing details.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 10\nPlease retry in ${retryDelay ?? '1s'}.`,
+      status: 'RESOURCE_EXHAUSTED',
+      details,
+    },
+  });
+}
+
+test('Gemini free-tier per-minute limit is a retryable rate limit that waits as long as Google asks', () => {
+  const e = classifyHttpError(429, geminiQuotaBody('GenerateRequestsPerMinutePerProjectPerModel-FreeTier', '41s'), { url: GEMINI });
+  assert.equal(e.kind, 'rate_limit');
+  assert.equal(e.retryAfterMs, 41000);
+  assert.match(e.message, /1分あたり/);
+});
+
+test('Gemini per-minute token limit is also a rate limit, and fractional delays are kept', () => {
+  const e = classifyHttpError(429, geminiQuotaBody('GenerateContentInputTokensPerModelPerMinute-FreeTier', '12.5s'), { url: GEMINI });
+  assert.equal(e.kind, 'rate_limit');
+  assert.equal(e.retryAfterMs, 12500);
+});
+
+test('Gemini per-day limit stays a fatal quota error that says when it resets', () => {
+  const e = classifyHttpError(429, geminiQuotaBody('GenerateRequestsPerDayPerProjectPerModel-FreeTier', '3600s'), { url: GEMINI });
+  assert.equal(e.kind, 'quota');
+  assert.match(e.message, /1日/);
+});
+
+test('without a RetryInfo, the "Please retry in" hint in the message is used', () => {
+  const body = JSON.stringify({
+    error: {
+      code: 429,
+      message: 'You exceeded your current quota. Please retry in 7.2s.',
+      status: 'RESOURCE_EXHAUSTED',
+      details: [{ '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{ quotaId: 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier' }] }],
+    },
+  });
+  const e = classifyHttpError(429, body, { url: GEMINI });
+  assert.equal(e.kind, 'rate_limit');
+  assert.equal(e.retryAfterMs, 7200);
+});

@@ -1,7 +1,7 @@
 import { cacheKey } from './cache.js';
 import { PROMPT_VERSION } from './prompt.js';
 import { callProvider } from './providers/index.js';
-import { withRetry } from './retry.js';
+import { withRetry, createCooldown } from './retry.js';
 import { TranslationError } from './errors.js';
 import { validateSettings, effectiveLimits } from './settings.js';
 
@@ -21,7 +21,9 @@ export async function translateWithSplit(texts, translateOnce) {
 }
 
 export function createTranslateService({ getSettings, cache, limiter, call = callProvider, fetch, sleep }) {
-  return async function translateTexts(texts) {
+  const cooldown = createCooldown({ sleep });
+  /** onWait: レート制限で待つときに、待つ時間（ミリ秒）を受け取る */
+  return async function translateTexts(texts, { onWait } = {}) {
     const settings = await getSettings();
     const invalid = validateSettings(settings);
     if (invalid) throw new TranslationError('config', invalid);
@@ -39,7 +41,7 @@ export function createTranslateService({ getSettings, cache, limiter, call = cal
     if (!missing.length) return result;
 
     const once = (subset) =>
-      limiter.run(() => withRetry(() => call(provider, subset, targetLang, config, { fetch }), { sleep }));
+      limiter.run(() => withRetry(() => call(provider, subset, targetLang, config, { fetch }), { sleep, cooldown, onWait }));
     const translated = await translateWithSplit(missing.map((i) => texts[i]), once);
 
     const entries = [];

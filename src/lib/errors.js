@@ -46,6 +46,35 @@ function extractApiMessage(bodyText) {
   }
 }
 
+/** "41s" / "12.5s" の形の待ち時間をミリ秒にする */
+function parseDurationMs(value) {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*s\s*$/.exec(String(value ?? ''));
+  return match ? Math.round(Number(match[1]) * 1000) : undefined;
+}
+
+/**
+ * Gemini は1分あたりの上限を超えたときも「quota」と返すので、詳細を見て1日の上限と見分ける。
+ * Gemini 形式の詳細がなければ null。
+ */
+function classifyGeminiQuota(bodyText) {
+  let details;
+  try {
+    details = JSON.parse(bodyText)?.error?.details;
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(details)) return null;
+  const quotaIds = details
+    .filter((d) => d?.['@type']?.endsWith('QuotaFailure'))
+    .flatMap((d) => d.violations ?? [])
+    .map((v) => String(v?.quotaId ?? ''));
+  if (!quotaIds.length) return null;
+  if (quotaIds.some((id) => /PerDay/i.test(id))) return { daily: true };
+  const retryInfo = details.find((d) => d?.['@type']?.endsWith('RetryInfo'));
+  const hint = /retry in (\d+(?:\.\d+)?s)/i.exec(extractApiMessage(bodyText))?.[1];
+  return { daily: false, retryAfterMs: parseDurationMs(retryInfo?.retryDelay) ?? parseDurationMs(hint) };
+}
+
 export function classifyHttpError(status, bodyText, { url = '', retryAfter = null } = {}) {
   const detail = extractApiMessage(bodyText);
   const suffix = detail ? `（${detail}）` : '';
@@ -57,6 +86,18 @@ export function classifyHttpError(status, bodyText, { url = '', retryAfter = nul
   }
   if (status === 401 || status === 403) {
     return new TranslationError('auth', `APIキーを確認してください (${status})${suffix}`);
+  }
+  const gemini = status === 429 ? classifyGeminiQuota(bodyText) : null;
+  if (gemini?.daily) {
+    return new TranslationError(
+      'quota',
+      `Gemini の無料枠の1日の上限に達しました。日本時間の夕方（太平洋時間の0時）に回復します。すぐ使いたい場合は別のモデルかプロバイダに切り替えてください${suffix}`,
+    );
+  }
+  if (gemini) {
+    return new TranslationError('rate_limit', 'Gemini の無料枠の1分あたりの上限に達しました', {
+      retryAfterMs: gemini.retryAfterMs ?? parseRetryAfter(retryAfter),
+    });
   }
   if (status === 429 && /quota/i.test(String(bodyText))) {
     // 利用上限（クォータ）切れは待っても回復しないことが多いので、再試行せずに止めて知らせる

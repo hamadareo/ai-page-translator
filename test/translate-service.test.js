@@ -120,3 +120,14 @@ test('LM Studio requests run at most two at a time even across tabs', async () =
   await translate(['a']);
   assert.deepEqual(maxes, [2]);
 });
+
+test('reports how long a rate limit makes it wait', async () => {
+  let n = 0;
+  const { translate } = setup(async (_p, texts) => {
+    if (++n === 1) throw new TranslationError('rate_limit', 'slow down', { retryAfterMs: 20000 });
+    return texts;
+  });
+  const waits = [];
+  assert.deepEqual(await translate(['a'], { onWait: (ms) => waits.push(ms) }), ['a']);
+  assert.deepEqual(waits, [20000]);
+});
