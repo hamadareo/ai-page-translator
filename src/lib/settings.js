@@ -30,11 +30,26 @@ export const DEFAULT_SETTINGS = {
   },
 };
 
+/**
+ * LM Studio の画面からコピーしたアドレス（http://…:1234）には /v1 が付いていない。
+ * パスのないアドレスには /v1 を補う
+ */
+function withApiPath(baseUrl) {
+  try {
+    const url = new URL(baseUrl);
+    if (url.pathname !== '/' || url.search || url.hash) return baseUrl;
+    return `${url.origin}/v1`;
+  } catch {
+    return baseUrl;
+  }
+}
+
 export function mergeSettings(stored) {
   const s = stored ?? {};
   const providers = {};
   for (const id of PROVIDER_IDS) {
     providers[id] = { ...DEFAULT_SETTINGS.providers[id], ...(s.providers?.[id] ?? {}) };
+    if (LOCAL_PROVIDERS.has(id)) providers[id].baseUrl = withApiPath(providers[id].baseUrl);
   }
   return { ...DEFAULT_SETTINGS, ...s, providers };
 }

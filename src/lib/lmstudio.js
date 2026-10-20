@@ -20,17 +20,29 @@ export function portOf(baseUrl) {
   return Number(url.port) || (url.protocol === 'https:' ? 443 : 80);
 }
 
-async function isServerUp(baseUrl, fetch) {
+/** サーバーの /models に問い合わせる。応答がなければ null */
+async function fetchModels(baseUrl, fetch) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
     const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, { signal: controller.signal });
-    return res.ok;
+    return res.ok ? res : null;
   } catch {
-    return false;
+    return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function isServerUp(baseUrl, fetch) {
+  return (await fetchModels(baseUrl, fetch)) != null;
+}
+
+/** 補助プログラムがなくても、サーバーが動いていればそこからモデル一覧を取る（埋め込み用モデルは除く） */
+async function listModelsFromServer(baseUrl, fetch) {
+  const res = baseUrl ? await fetchModels(baseUrl, fetch) : null;
+  const ids = (await res?.json().catch(() => null))?.data?.map((m) => String(m?.id ?? '')) ?? null;
+  return ids && ids.filter((id) => id && !/embed/i.test(id)).map((id) => ({ key: id, name: id }));
 }
 
 function helperError(error, model, port) {
@@ -87,9 +99,13 @@ export async function ensureLmStudio(
   return { started: Boolean(reply.started), loaded: Boolean(reply.loaded) };
 }
 
-export async function listLmStudioModels({ sendNativeMessage }) {
+export async function listLmStudioModels({ sendNativeMessage, baseUrl, fetch = globalThis.fetch }) {
   const { reply, missing } = await callHelper(sendNativeMessage, { cmd: 'list' });
-  if (missing) throw new TranslationError('config', MESSAGES.helperMissing);
+  if (missing) {
+    const models = await listModelsFromServer(baseUrl, fetch);
+    if (models) return models;
+    throw new TranslationError('config', MESSAGES.helperMissing);
+  }
   if (!reply?.ok) throw helperError(reply?.error, '');
   return reply.models;
 }

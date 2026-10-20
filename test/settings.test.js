@@ -77,3 +77,26 @@ test('following clicked links is off by default and kept when saved', () => {
   assert.equal(mergeSettings({}).followLinks, false);
   assert.equal(mergeSettings({ followLinks: true }).followLinks, true);
 });
+
+test('a local server address without a path gets /v1, so LM Studio\'s copied address works as-is', () => {
+  const s = mergeSettings({
+    providers: {
+      lmstudio: { baseUrl: 'http://10.15.35.233:1234' },
+      compat: { baseUrl: 'http://localhost:11434/' },
+    },
+  });
+  assert.equal(s.providers.lmstudio.baseUrl, 'http://10.15.35.233:1234/v1');
+  assert.equal(s.providers.compat.baseUrl, 'http://localhost:11434/v1');
+});
+
+test('addresses that already have a path, or are not URLs, are left alone', () => {
+  const s = mergeSettings({
+    providers: {
+      lmstudio: { baseUrl: 'http://localhost:1234/v1/' },
+      compat: { baseUrl: 'https://openrouter.ai/api/v1' },
+    },
+  });
+  assert.equal(s.providers.lmstudio.baseUrl, 'http://localhost:1234/v1/');
+  assert.equal(s.providers.compat.baseUrl, 'https://openrouter.ai/api/v1');
+  assert.equal(mergeSettings({ providers: { compat: { baseUrl: 'not a url' } } }).providers.compat.baseUrl, 'not a url');
+});

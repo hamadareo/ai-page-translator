@@ -91,8 +91,8 @@ const handlers = {
     const [sample] = await callProvider(settings.provider, ['Hello, world!'], settings.targetLang, settings.providers[settings.provider]);
     return { sample };
   },
-  async listLmStudioModels() {
-    return { models: await listLmStudioModels({ sendNativeMessage }) };
+  async listLmStudioModels({ baseUrl }) {
+    return { models: await listLmStudioModels({ sendNativeMessage, baseUrl }) };
   },
   async clearCache() {
     await cache.clear();

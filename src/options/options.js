@@ -35,7 +35,8 @@ function read() {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value.trim();
     setPath(settings, el.name, value);
   }
-  return settings;
+  // 入力されたアドレスにも /v1 の補完などを効かせる
+  return mergeSettings(settings);
 }
 
 function show(text, isError = false) {
@@ -49,7 +50,7 @@ async function loadLmStudioModels() {
   const input = form.querySelector('[name="providers.lmstudio.model"]');
   hint.textContent = 'モデル一覧を取得しています…';
   const res = await chrome.runtime
-    .sendMessage({ type: 'listLmStudioModels' })
+    .sendMessage({ type: 'listLmStudioModels', baseUrl: read().providers.lmstudio.baseUrl })
     .catch((err) => ({ ok: false, error: { message: String(err?.message ?? err) } }));
   if (!res?.ok) {
     hint.textContent = `モデル一覧を取得できませんでした: ${res?.error?.message ?? '不明なエラー'}。モデル名を直接入力することもできます。`;
@@ -103,6 +104,7 @@ form.addEventListener('submit', async (event) => {
   const settings = await prepare();
   if (!settings) return;
   await saveSettings(chrome.storage.local, settings);
+  fill(settings);
   show('保存しました');
 });
 

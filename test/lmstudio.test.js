@@ -134,3 +134,20 @@ test('a server running on another port is reported right away', async () => {
     (e) => e.kind === 'config' && /1235/.test(e.message) && /1234/.test(e.message),
   );
 });
+
+test('without the helper, the model list comes from the running server', async () => {
+  const fetch = async (url) => {
+    assert.equal(url, 'http://10.15.35.233:1234/v1/models');
+    return new Response('{"data":[{"id":"google/gemma-3-12b"},{"id":"text-embedding-nomic-embed-text-v1.5"}]}', { status: 200 });
+  };
+  const models = await listLmStudioModels({ sendNativeMessage: fakeHost(HELPER_MISSING), baseUrl: 'http://10.15.35.233:1234/v1', fetch });
+  assert.deepEqual(models, [{ key: 'google/gemma-3-12b', name: 'google/gemma-3-12b' }]);
+});
+
+test('without the helper and with the server off, the helper hint is shown', async () => {
+  const fetch = async () => { throw new TypeError('Failed to fetch'); };
+  await assert.rejects(
+    listLmStudioModels({ sendNativeMessage: fakeHost(HELPER_MISSING), baseUrl: 'http://localhost:1234/v1', fetch }),
+    /補助プログラム/,
+  );
+});
