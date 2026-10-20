@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Page Translator 導入マニュアル</title>
+<style>
+  :root { --bg: #fff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --box: #f6f8fa; --accent: #0969da; --warn-bg: #fff8c5; --warn-line: #d4a72c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --box: #151b23; --accent: #4493f8; --warn-bg: #2e2a1a; --warn-line: #9e6a03; }
+  }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; margin: 0; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.8em; margin: 0 0 4px; }
+  h2 { font-size: 1.3em; margin: 2.2em 0 .6em; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 1.05em; margin: 1.6em 0 .4em; }
+  .lead { color: var(--muted); margin-top: 0; }
+  ol, ul { padding-left: 1.5em; }
+  li { margin: .35em 0; }
+  code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; background: var(--box); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  a { color: var(--accent); }
+  .note { background: var(--warn-bg); border-left: 4px solid var(--warn-line); padding: 10px 14px; border-radius: 4px; margin: 1em 0; }
+  table { border-collapse: collapse; width: 100%; margin: .8em 0; font-size: .95em; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--box); }
+  .toc { background: var(--box); border: 1px solid var(--line); border-radius: 6px; padding: 10px 18px; }
+  .toc ol { margin: .3em 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>AI Page Translator 導入マニュアル</h1>
+<p class="lead">生成AI（Gemini・ChatGPT・Claude など）で、Web ページ全体を日本語に翻訳する Google Chrome の拡張機能です。</p>
+
+<div class="toc">
+<ol>
+  <li><a href="#need">用意するもの</a></li>
+  <li><a href="#install">拡張機能を Chrome に入れる</a></li>
+  <li><a href="#key">APIキーを用意する（Gemini の場合）</a></li>
+  <li><a href="#setup">設定する</a></li>
+  <li><a href="#local">ローカルLLMで使う（APIキー不要・無料）</a></li>
+  <li><a href="#use">使い方</a></li>
+  <li><a href="#trouble">困ったとき</a></li>
+  <li><a href="#update">更新・削除のしかた</a></li>
+</ol>
+</div>
+
+<h2 id="need">1. 用意するもの</h2>
+<ul>
+  <li>パソコン版の <strong>Google Chrome</strong>（Windows / Mac）</li>
+  <li>翻訳に使う AI の <strong>APIキー</strong>（どれか1つ）
+    <table>
+      <tr><th>AI</th><th>料金</th><th>APIキーの取得先</th></tr>
+      <tr><td>Google Gemini</td><td>無料枠あり（おすすめ）</td><td><a href="https://aistudio.google.com/apikey">Google AI Studio</a></td></tr>
+      <tr><td>OpenAI（ChatGPT）</td><td>有料（使った分だけ）</td><td><a href="https://platform.openai.com/api-keys">OpenAI Platform</a></td></tr>
+      <tr><td>Anthropic（Claude）</td><td>有料（使った分だけ）</td><td><a href="https://console.anthropic.com/settings/keys">Anthropic Console</a></td></tr>
+    </table>
+    ChatGPT や Claude の月額プラン（Plus / Pro など）とは別契約です。月額プランに入っていても API は使えません。
+  </li>
+</ul>
+<p>APIキーを使わずに、自分のパソコンの中で動く AI（ローカルLLM）で翻訳することもできます。<a href="#local">5. ローカルLLMで使う</a> を見てください。</p>
+
+<h2 id="install">2. 拡張機能を Chrome に入れる</h2>
+<ol>
+  <li>受け取った <code>ai-page-translator.zip</code> を展開（ダブルクリック、Windows では右クリック →「すべて展開」）します。</li>
+  <li>できた <code>ai-page-translator</code> フォルダを、<strong>消さない場所</strong>（「書類」「ドキュメント」など）に移します。<br>
+    Chrome はこのフォルダから拡張機能を読み込み続けるので、フォルダを消したり動かしたりすると使えなくなります。</li>
+  <li>Chrome のアドレスバーに <code>chrome://extensions</code> と入力して開きます。</li>
+  <li>右上の <strong>「デベロッパー モード」</strong>をオンにします。</li>
+  <li>左上に出てくる <strong>「パッケージ化されていない拡張機能を読み込む」</strong>を押し、さきほどの <code>ai-page-translator</code> フォルダを選びます。<br>
+    （中に <code>manifest.json</code> が入っているフォルダです。その1つ外側や内側のフォルダを選ぶと読み込めません。）</li>
+  <li>一覧に「AI Page Translator」が出れば完了です。</li>
+  <li>使いやすいように、ツールバーのパズルのアイコン（拡張機能）を押し、AI Page Translator の横のピンを押して、ツールバーに固定しておきます。</li>
+</ol>
+<div class="note">Chrome を起動したときに「デベロッパー モードの拡張機能を無効にする」などの案内が出ることがあります。Chrome ウェブストア以外から入れた拡張機能に出るもので、そのまま閉じて大丈夫です。</div>
+
+<h2 id="key">3. APIキーを用意する（Gemini の場合）</h2>
+<ol>
+  <li><a href="https://aistudio.google.com/apikey">Google AI Studio の APIキーのページ</a> を開き、Google アカウントでログインします。</li>
+  <li>「APIキーを作成」（Create API key）を押します。</li>
+  <li>表示されたキー（<code>AIza…</code> で始まる長い文字列）をコピーします。</li>
+</ol>
+<div class="note">APIキーはパスワードと同じです。他の人に教えたり、SNS などに貼ったりしないでください。</div>
+
+<h2 id="setup">4. 設定する</h2>
+<ol>
+  <li>ツールバーの AI Page Translator のアイコンを押し、出てきた画面の設定へのリンクを押します。<br>
+    （または <code>chrome://extensions</code> の AI Page Translator の「詳細」→「拡張機能のオプション」）</li>
+  <li><strong>プロバイダ</strong>で使う AI を選びます（例: Google Gemini）。</li>
+  <li><strong>APIキー</strong>にコピーしたキーを貼り付けます。</li>
+  <li><strong>モデル</strong>は最初から入っているもののままで大丈夫です。</li>
+  <li><strong>「保存」</strong>を押し、続けて<strong>「接続テスト」</strong>を押します。訳文の例が表示されれば準備完了です。</li>
+</ol>
+
+<h3>その他の設定（必要なときだけ）</h3>
+<table>
+  <tr><th>設定</th><th>内容</th></tr>
+  <tr><td>翻訳先言語</td><td>最初は「日本語」。英語にしたいときは「英語」などに変えます。</td></tr>
+  <tr><td>クリックした先のページも自動で翻訳する</td><td>翻訳したタブでリンクを押して移った先も、自動で翻訳します。保存するときに「すべてのサイトへのアクセス」の許可を求められるので、「許可」を押してください。</td></tr>
+  <tr><td>サイトの翻訳禁止指定を無視して翻訳する</td><td>見出しなど一部が翻訳されないサイトで使います。レイアウトが崩れることがあります。</td></tr>
+  <tr><td>1バッチの最大文字数 / 同時リクエスト数</td><td>ふつうは変えなくて大丈夫です。Gemini の無料枠で待ち時間が長いときは、最大文字数を <code>8000</code> くらいに増やすと、送る回数が減ります。</td></tr>
+</table>
+
+<h2 id="local">5. ローカルLLMで使う（APIキー不要・無料）</h2>
+<p>LM Studio や Ollama というアプリを使うと、AI を自分のパソコンの中で動かして翻訳できます。</p>
+<ul>
+  <li><strong>よいところ</strong>: APIキーも料金も要りません。ページの文章がパソコンの外に送られないので、社外秘のページにも使えます。利用上限もありません。</li>
+  <li><strong>気をつけること</strong>: パソコンの性能が必要で、クラウドの AI より遅く、訳の質も少し落ちます。メモリ（RAM）は 16GB 以上がおすすめです。</li>
+</ul>
+<table>
+  <tr><th>メモリ</th><th>おすすめのモデル</th></tr>
+  <tr><td>16GB 以上</td><td>Gemma 3 12B（LM Studio: <code>google/gemma-3-12b</code> / Ollama: <code>gemma3:12b</code>）</td></tr>
+  <tr><td>8GB</td><td>Gemma 3 4B（LM Studio: <code>google/gemma-3-4b</code> / Ollama: <code>gemma3:4b</code>）。軽いぶん、訳が崩れることが増えます。</td></tr>
+</table>
+<p>LM Studio と Ollama のどちらか一方を入れれば使えます。画面で操作できる LM Studio のほうが簡単です。</p>
+
+<h3>A. LM Studio を使う（おすすめ）</h3>
+<ol>
+  <li><a href="https://lmstudio.ai/">lmstudio.ai</a> から LM Studio をダウンロードしてインストールします（Windows / Mac）。</li>
+  <li>LM Studio を開き、左の虫めがねのアイコン（Discover）で <code>gemma-3-12b</code> を検索して、ダウンロードします。</li>
+  <li>左の「Developer」（開発者）の画面を開き、上の <strong>「Status: Stopped」のスイッチをオン</strong>にして、サーバーを起動します（「Running」になればOK）。<br>
+    あわせてモデルを選んで読み込んでおくと、最初の翻訳が速く始まります。</li>
+  <li>拡張機能の設定画面で、<strong>プロバイダ</strong>を「LM Studio（ローカル）」にします。</li>
+  <li><strong>モデル</strong>に <code>google/gemma-3-12b</code> と入力します（LM Studio のモデル名の欄に出ている名前と同じにします）。</li>
+  <li><strong>アドレス</strong>は <code>http://localhost:1234/v1</code> のままにします。</li>
+  <li>「保存」→「接続テスト」を押し、訳文の例が出れば完了です。</li>
+</ol>
+<div class="note">
+  設定画面に「モデル一覧を取得できませんでした」と出ても、モデル名を手で入力すれば使えます（一覧の表示には、下の「自動起動の準備」が必要です）。<br>
+  翻訳するときは、毎回 LM Studio を開いてサーバーを起動しておいてください。
+</div>
+
+<h3>LM Studio を自動で起動する（Mac のみ・任意）</h3>
+<p>Mac では、準備をしておくと、翻訳するときに LM Studio のサーバーの起動とモデルの読み込みを自動でやってくれます。Windows ではこの機能は使えないので、上の手順のとおり自分で起動してください。</p>
+<ol>
+  <li>LM Studio を一度起動しておきます（<code>lms</code> コマンドが使えるようになります）。</li>
+  <li>「ターミナル」アプリを開き、次のように入力して Enter を押します。<br>
+    <code>sh </code>と入力したあと（最後に半角スペースを入れる）、<code>ai-page-translator</code> フォルダの中の <code>native-host</code> フォルダにある <code>install.sh</code> をターミナルの画面にドラッグすると、場所が自動で入ります。<br>
+    例: <code>sh ~/Documents/ai-page-translator/native-host/install.sh</code></li>
+  <li>「Python 3.8 以上が必要です」と出たら、<a href="https://www.python.org/downloads/">python.org</a> から Python をインストールして、もう一度実行します。</li>
+  <li><code>chrome://extensions</code> で AI Page Translator の再読み込みボタン（↻）を押します。</li>
+  <li>設定画面の「LM Studio を自動で起動する」にチェックが入っていることを確かめます。</li>
+</ol>
+<p>やめるときは、同じ場所の <code>uninstall.sh</code> を同じように実行します。</p>
+
+<h3>B. Ollama を使う</h3>
+<ol>
+  <li><a href="https://ollama.com/download">ollama.com</a> から Ollama をダウンロードしてインストールし、起動します。</li>
+  <li>ターミナル（Windows では「ターミナル」または「コマンド プロンプト」）で <code>ollama pull gemma3:12b</code> を実行して、モデルをダウンロードします。</li>
+  <li>拡張機能の設定画面で、<strong>プロバイダ</strong>を「OpenAI互換 / ローカルLLM」にします。</li>
+  <li><strong>ベースURL</strong>は <code>http://localhost:11434/v1</code>、<strong>モデル</strong>は <code>gemma3:12b</code> にします。APIキーは空のままで大丈夫です。</li>
+  <li>「保存」→「接続テスト」を押します。</li>
+</ol>
+<div class="note">
+  接続テストで「ローカルサーバーが拒否しました (403)」と出たら、Ollama に「拡張機能からの接続を許可する」設定が必要です。<br>
+  Mac: ターミナルで <code>launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"</code> を実行し、Ollama を終了して起動し直します。<br>
+  Windows: 「システム環境変数の編集」→「環境変数」で、ユーザー環境変数に 名前 <code>OLLAMA_ORIGINS</code>・値 <code>chrome-extension://*</code> を追加し、Ollama を終了して起動し直します。
+</div>
+
+<h2 id="use">6. 使い方</h2>
+<ol>
+  <li>翻訳したいページを開きます。</li>
+  <li>ツールバーの AI Page Translator のアイコンを押し、<strong>「翻訳」</strong>を押します。</li>
+  <li>ページの文章が順に日本語に置き換わります。ページの右下に進み具合が表示されます。</li>
+</ol>
+<ul>
+  <li><strong>「停止」</strong>: 翻訳を途中で止めます。</li>
+  <li><strong>「原文に戻す」</strong>: 元の文章に戻します。</li>
+  <li>スクロールして新しく出てきた文章も、自動で翻訳されます。</li>
+  <li>一度訳した文章は保存されるので、同じページをもう一度訳すときは速く、AI の利用量もほとんど使いません。</li>
+</ul>
+<div class="note">クラウドの AI（Gemini・ChatGPT・Claude）を選んでいるときは、ページの文章がその会社（Google・OpenAI・Anthropic）に送られます。社外秘の資料や個人情報が載ったページでは、ローカルLLMを使ってください。APIキーと設定は、そのパソコンの Chrome の中だけに保存されます。</div>
+
+<h2 id="trouble">7. 困ったとき</h2>
+<table>
+  <tr><th>表示・症状</th><th>対処</th></tr>
+  <tr><td>「APIキーを確認してください (401 / 403)」</td><td>キーが間違っています。コピーし直して貼り付け、「保存」を押してください。</td></tr>
+  <tr><td>「利用上限のため ○秒待ってから続けます…」</td><td>Gemini の無料枠の「1分あたりの上限」です。そのまま待てば自動で続きます。</td></tr>
+  <tr><td>「Gemini の無料枠の1日の上限に達しました」</td><td>その日の無料分を使い切りました。日本時間の夕方（16〜17時ごろ）に回復します。</td></tr>
+  <tr><td>「APIの利用上限（クォータ）に達しました」</td><td>OpenAI / Anthropic の場合は、残高や支払い設定を確認してください。</td></tr>
+  <tr><td>「サーバーエラー (503)」</td><td>AI の会社のサーバーが混んでいます。少し待ってからもう一度「翻訳」を押してください。</td></tr>
+  <tr><td>「翻訳完了（○件失敗）」</td><td>もう一度「翻訳」を押すと、失敗した部分だけ訳し直します。</td></tr>
+  <tr><td>「このページは翻訳できません」</td><td>Chrome の設定画面（<code>chrome://</code> で始まるページ）、ウェブストア、PDF は翻訳できません。</td></tr>
+  <tr><td>一部の見出しなどが翻訳されない</td><td>設定の「サイトの翻訳禁止指定を無視して翻訳する」をオンにしてください。</td></tr>
+  <tr><td>「ローカルLLMに接続できません」</td><td>LM Studio のサーバー（または Ollama）が起動していません。起動してからもう一度試してください。</td></tr>
+  <tr><td>ローカルLLMで、訳が崩れる・一部が訳されない</td><td>小さいモデルで起きやすいです。もう一度「翻訳」を押すか、大きいモデル（12B など）に変えてください。</td></tr>
+  <tr><td>アイコンを押しても何も起きない</td><td>ページを再読み込みしてから、もう一度試してください。</td></tr>
+</table>
+
+<h2 id="update">8. 更新・削除のしかた</h2>
+<h3>新しい版に更新する</h3>
+<ol>
+  <li>新しい zip を展開し、今の <code>ai-page-translator</code> フォルダの中身を、新しいものに入れ替えます（フォルダの場所は変えないでください）。</li>
+  <li><code>chrome://extensions</code> を開き、AI Page Translator の再読み込みボタン（↻）を押します。設定はそのまま残ります。</li>
+</ol>
+<h3>削除する</h3>
+<p><code>chrome://extensions</code> で AI Page Translator の「削除」を押し、そのあと <code>ai-page-translator</code> フォルダを消します。</p>
+
+<h2>詳しい人向け</h2>
+<ul>
+  <li>OpenAI互換のサーバー（OpenRouter や vLLM など）も「OpenAI互換 / ローカルLLM」で使えます。詳しくはフォルダ内の <code>README.md</code> を見てください。</li>
+  <li>ソースコード: <a href="https://github.com/hamadareo/ai-page-translator">github.com/hamadareo/ai-page-translator</a>（MIT ライセンス）</li>
+</ul>
+</main>
+</body>
+</html>
